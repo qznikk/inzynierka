@@ -1,0 +1,7 @@
+/* index.css — wymagany dla TailwindCSS */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Możesz tu dodać własne globalne style, jeśli chcesz */
