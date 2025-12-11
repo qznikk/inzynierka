@@ -4,7 +4,7 @@
 // - login/register redirect based on role: /client, /technician, /admin
 // - expects VITE_API_URL env (fallback to http://localhost:5050)
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function Navbar() {
@@ -15,9 +15,22 @@ export default function Navbar() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // auth state (kept in sync with localStorage)
+  const [user, setUser] = useState(null);
+
   // form state
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [regForm, setRegForm] = useState({ name: "", email: "", password: "" });
+
+  useEffect(() => {
+    // read user from localStorage on mount
+    try {
+      const raw = localStorage.getItem("user");
+      if (raw) setUser(JSON.parse(raw));
+    } catch (e) {
+      setUser(null);
+    }
+  }, []);
 
   function open(type) {
     setError("");
@@ -48,18 +61,21 @@ export default function Navbar() {
         body: JSON.stringify(loginForm),
       });
 
-      // Network errors will throw before we get here
+      // attempt to parse json (graceful)
       const data = await res.json().catch(() => ({}));
       if (!res.ok)
         throw new Error(data.error || `Login failed (${res.status})`);
 
       // save token and user
       if (data.token) localStorage.setItem("token", data.token);
-      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
-      close();
-      console.log("Logged in:", data.user);
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setUser(data.user);
+      }
 
-      // redirect base on role from response
+      close();
+
+      // redirect based on role from response
       const role = data?.user?.role;
       redirectByRole(role);
     } catch (err) {
@@ -86,9 +102,12 @@ export default function Navbar() {
         throw new Error(data.error || `Register failed (${res.status})`);
 
       if (data.token) localStorage.setItem("token", data.token);
-      if (data.user) localStorage.setItem("user", JSON.stringify(data.user));
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        setUser(data.user);
+      }
+
       close();
-      console.log("Registered:", data.user);
 
       // after registration user is a CLIENT (server enforces), redirect to client panel
       const role = data?.user?.role || "CLIENT";
@@ -100,30 +119,53 @@ export default function Navbar() {
     }
   }
 
+  function logout() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+    // optional: clear other stored data if needed
+    navigate("/");
+  }
+
   return (
     <>
       <nav className="w-full bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 bg-indigo-600 rounded flex items-center justify-center text-white font-bold">
-              R
+              H
             </div>
-            <span className="font-semibold">Twoja Firma</span>
+            <span className="font-semibold">HVACapp</span>
           </div>
 
+          {/* --- Right side: show login/register when no user, otherwise navbarLogged --- */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => open("login")}
-              className="px-4 py-2 rounded-md border border-gray-200 hover:shadow-sm"
-            >
-              Zaloguj
-            </button>
-            <button
-              onClick={() => open("register")}
-              className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
-            >
-              Rejestracja
-            </button>
+            {!user ? (
+              <>
+                <button
+                  onClick={() => open("login")}
+                  className="px-4 py-2 rounded-md border border-gray-200 hover:shadow-sm"
+                >
+                  Zaloguj
+                </button>
+                <button
+                  onClick={() => open("register")}
+                  className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  Rejestracja
+                </button>
+              </>
+            ) : (
+              // navbarLogged
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={logout}
+                  className="px-3 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 text-sm"
+                >
+                  Wyloguj
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </nav>

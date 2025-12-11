@@ -29,6 +29,7 @@ import AdminPayments from "../pages/Admin/Payments";
 import AdminReports from "../pages/Admin/Reports";
 import Settings from "../pages/Admin/Settings";
 import AdminProfile from "../pages/Admin/Profile";
+import AdminCalendar from "../pages/Admin/Calendar";
 
 const router = createBrowserRouter([
   {
@@ -81,6 +82,7 @@ const router = createBrowserRouter([
       { path: "reports", element: <AdminReports /> },
       { path: "settings", element: <Settings /> },
       { path: "profile", element: <AdminProfile /> },
+      { path: "calendar", element: <AdminCalendar /> },
     ],
   },
 ]);

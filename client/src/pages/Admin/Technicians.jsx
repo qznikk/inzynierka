@@ -1,5 +1,6 @@
-// pages/Admin/Technicians.jsx
+// src/pages/Admin/Technicians.jsx
 import React, { useEffect, useState } from "react";
+import TechnicianDetails from "../../components/TechnicianDetails";
 
 function randomPassword(length = 12) {
   const chars =
@@ -20,22 +21,30 @@ export default function Technicians() {
   const [genPassword, setGenPassword] = useState("");
   const [message, setMessage] = useState("");
 
+  // wybrany technik (obiekt) do modal-a
+  const [selectedTech, setSelectedTech] = useState(null);
+
   useEffect(() => {
     fetchTechs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchTechs() {
     setLoading(true);
+    setMessage("");
     try {
       const res = await fetch(`${API}/api/admin/technicians`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error("Failed to fetch technicians");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to fetch technicians");
+      }
       const data = await res.json();
-      setTechs(data.technicians || data);
+      setTechs(data.technicians || data || []);
     } catch (err) {
       console.error(err);
-      setMessage(err.message);
+      setMessage(err.message || "Błąd pobierania technicianów");
     } finally {
       setLoading(false);
     }
@@ -69,14 +78,13 @@ export default function Technicians() {
       const data = await res.json();
       if (!res.ok)
         throw new Error(data.error || "Nie udało się dodać technika");
-      // show created password to admin and refresh list
       setMessage(`Technik dodany. Hasło: ${genPassword}`);
       setForm({ name: "", email: "" });
       setGenPassword("");
       fetchTechs();
     } catch (err) {
       console.error(err);
-      setMessage(err.message);
+      setMessage(err.message || "Błąd przy tworzeniu technika");
     }
   }
 
@@ -90,7 +98,9 @@ export default function Technicians() {
         <div className="bg-white p-4 rounded shadow">
           <h2 className="font-medium mb-3">Add new technician</h2>
           {message && (
-            <div className="text-sm mb-3 text-red-600">{message}</div>
+            <div className="text-sm mb-3 text-red-600 whitespace-pre-wrap">
+              {message}
+            </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-3">
             <input
@@ -158,12 +168,21 @@ export default function Technicians() {
               )}
               {techs.map((t) => (
                 <li
-                  key={t.id}
+                  key={t.id ?? t._id ?? t.email}
                   className="flex items-center justify-between border-b py-2"
                 >
                   <div>
-                    <div className="font-medium">{t.name}</div>
+                    <div className="font-medium">{t.name || "—"}</div>
                     <div className="text-xs text-gray-500">{t.email}</div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedTech(t)} // przekazujemy cały obiekt
+                      className="px-3 py-1 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                    >
+                      Szczegóły
+                    </button>
                   </div>
                 </li>
               ))}
@@ -171,6 +190,14 @@ export default function Technicians() {
           )}
         </div>
       </section>
+
+      {/* Modal: TechnicianDetails */}
+      {selectedTech && (
+        <TechnicianDetails
+          tech={selectedTech}
+          onClose={() => setSelectedTech(null)}
+        />
+      )}
     </div>
   );
 }

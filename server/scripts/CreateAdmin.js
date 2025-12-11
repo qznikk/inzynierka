@@ -7,6 +7,7 @@ dotenv.config();
 async function main() {
   const email = "admin@example.com";
   const name = "Administrator";
+  //tech@example.com C5G80adESb6)
   const password = "SuperSecretAdmin123!"; // zmień natychmiast po stworzeniu
   const hashed = await bcrypt.hash(password, 10);
   const role = "ADMIN";
