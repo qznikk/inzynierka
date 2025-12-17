@@ -7,8 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-server/uploads/reports/*
-server/uploads/avatars/*
+server/uploads/reports/*.png
+server/uploads/reports/*.jpg
+server/uploads/avatars/*.png
+server/uploads/avatars/*.jpg
 
 **/node_modules
 dist
