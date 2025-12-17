@@ -8,7 +8,6 @@ const router = express.Router();
 
 /**
  * GET /api/admin/technicians
- * Rozszerzona lista techników (bez kolumn, które mogą nie istnieć)
  */
 router.get("/technicians", auth, requireRole("ADMIN"), async (req, res) => {
   try {
@@ -41,7 +40,6 @@ router.get("/technicians", auth, requireRole("ADMIN"), async (req, res) => {
 
 /**
  * GET /api/admin/technicians/:id
- * Szczegóły pojedynczego technika
  */
 router.get("/technicians/:id", auth, requireRole("ADMIN"), async (req, res) => {
   try {
@@ -76,7 +74,6 @@ router.get("/technicians/:id", auth, requireRole("ADMIN"), async (req, res) => {
 
 /**
  * GET /api/admin/clients
- * Lista klientów (rozszerzona o address/phone/avatar)
  */
 router.get("/clients", auth, requireRole("ADMIN"), async (req, res) => {
   try {
@@ -108,7 +105,6 @@ router.get("/clients", auth, requireRole("ADMIN"), async (req, res) => {
 
 /**
  * GET /api/admin/clients/:id
- * Szczegóły pojedynczego klienta
  */
 router.get("/clients/:id", auth, requireRole("ADMIN"), async (req, res) => {
   try {
@@ -142,7 +138,6 @@ router.get("/clients/:id", auth, requireRole("ADMIN"), async (req, res) => {
 
 /**
  * POST /api/admin/create-technician
- * Tworzy technika (ADMIN only) — zwraca parę dodatkowych pól
  */
 router.post(
   "/create-technician",

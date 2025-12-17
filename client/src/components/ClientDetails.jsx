@@ -1,5 +1,5 @@
-// src/pages/Admin/ClientDetails.jsx
 import React, { useEffect, useState } from "react";
+import { useNotify } from "../notifications/NotificationContext";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
@@ -8,28 +8,28 @@ export default function ClientDetails({
   clientId,
   onClose,
 }) {
-  // akceptujemy albo `client` (obiekt), albo `clientId` (string/number)
+  const notify = useNotify();
+
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
   const [client, setClient] = useState(initialClient || null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   useEffect(() => {
-    // jeśli nie mamy obiektu, a mamy clientId — spróbuj fetcha
+    if (!token) return;
     if (!initialClient && clientId) {
       fetchClient(clientId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, initialClient]);
+  }, [token, clientId, initialClient]);
 
   async function tryFetch(url, opts = {}) {
-    console.debug("ClientDetails: fetch ->", url, opts);
     const res = await fetch(url, opts);
     let body = null;
     try {
       body = await res.json().catch(() => null);
-    } catch (e) {
+    } catch {
       body = null;
     }
     return { res, body };
@@ -37,7 +37,6 @@ export default function ClientDetails({
 
   async function fetchClient(id) {
     setLoading(true);
-    setError("");
     setClient(null);
 
     const headers = token
@@ -54,7 +53,6 @@ export default function ClientDetails({
       }
 
       if (res.status === 404) {
-        // try query variants
         const url2 = `${API}/api/admin/clients?id=${encodeURIComponent(id)}`;
         ({ res, body } = await tryFetch(url2, { headers }));
         if (res.ok) {
@@ -74,18 +72,16 @@ export default function ClientDetails({
         }
 
         throw new Error(
-          body?.error || body?.message || `Failed to fetch client ${id} (404)`
+          body?.error || body?.message || `Client not found (${id})`
         );
       }
 
       throw new Error(
-        body?.error ||
-          body?.message ||
-          `Failed to fetch client ${id} (${res.status})`
+        body?.error || body?.message || `Error fetching client (${res.status})`
       );
     } catch (err) {
       console.error("ClientDetails fetch error:", err);
-      setError(err.message || "Błąd pobierania szczegółów klienta");
+      notify.error(err.message || "Error loading client details");
     } finally {
       setLoading(false);
     }
@@ -98,111 +94,125 @@ export default function ClientDetails({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      aria-modal="true"
       role="dialog"
+      aria-modal="true"
     >
+      {/* OVERLAY */}
       <div
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-overlay backdrop-blur-sm"
         onClick={handleBackdropClick}
       />
 
-      <div className="relative bg-white rounded-lg shadow-xl max-w-xl w-full mx-4 z-10">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-lg font-medium">Szczegóły klienta</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 px-2 py-1"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
+      {/* MODAL */}
+      <div className="relative z-10 w-full max-w-xl mx-4">
+        <div className="bg-modal rounded-2xl border border-borderSoft shadow-xl overflow-hidden">
+          {/* HEADER */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-borderSoft">
+            <h3 className="text-lg font-semibold text-textPrimary">
+              Client Details
+            </h3>
 
-        <div className="p-4 space-y-4">
-          {loading ? (
-            <div>Loading...</div>
-          ) : error ? (
-            <div className="text-sm text-red-600">
-              {error}
-              <div className="text-xs text-gray-400 mt-2">
-                Sprawdź konsolę network/logi backendu dla więcej szczegółów.
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="text-textSecondary hover:text-textPrimary transition"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* CONTENT */}
+          <div className="px-5 py-4 space-y-4">
+            {loading ? (
+              <div className="text-sm text-textSecondary">Loading…</div>
+            ) : !client ? (
+              <div className="text-sm text-textSecondary">
+                No client data available
               </div>
-            </div>
-          ) : !client ? (
-            <div className="text-sm text-gray-500">Brak danych klienta</div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex flex-col items-center sm:items-start sm:col-span-1">
-                {client.avatar_url || client.avatar ? (
-                  <img
-                    src={`${API}${client.avatar_url || client.avatar}`}
-                    alt={client.name || client.email}
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = "/logo192.png";
-                    }}
-                    className="w-28 h-28 rounded-full object-cover mb-2"
-                  />
-                ) : (
-                  <div className="w-28 h-28 rounded-full bg-gray-100 flex items-center justify-center text-2xl text-gray-400 mb-2">
-                    {(client.name || client.fullName || client.email || "—")
-                      .charAt(0)
-                      .toUpperCase()}
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                {/* AVATAR */}
+                <div className="flex flex-col items-center sm:items-start">
+                  {client.avatar_url || client.avatar ? (
+                    <img
+                      src={`${API}${client.avatar_url || client.avatar}`}
+                      alt={client.name || client.email}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = "/logo192.png";
+                      }}
+                      className="w-28 h-28 rounded-full object-cover border border-borderSoft"
+                    />
+                  ) : (
+                    <div className="w-28 h-28 rounded-full bg-section flex items-center justify-center text-2xl font-semibold text-primary border border-borderSoft">
+                      {(client.name || client.fullName || client.email || "—")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+                  )}
+
+                  <div className="mt-3 text-xs text-textSecondary">Role</div>
+                  <div className="text-sm font-medium text-textPrimary">
+                    {client.role || "Client"}
                   </div>
-                )}
+                </div>
 
-                <div className="text-sm text-gray-500">Rola</div>
-                <div className="font-medium">{client.role || "Klient"}</div>
-              </div>
-
-              <div className="sm:col-span-2">
-                <div className="mb-3">
-                  <div className="text-xs text-gray-500">Imię / Nazwa</div>
-                  <div className="font-medium">
+                {/* DETAILS */}
+                <div className="sm:col-span-2">
+                  <Info label="Name">
                     {client.name || client.fullName || "—"}
-                  </div>
-                </div>
+                  </Info>
 
-                <div className="mb-3">
-                  <div className="text-xs text-gray-500">Email</div>
-                  <div className="font-medium">{client.email || "—"}</div>
-                </div>
+                  <Info label="Email">{client.email || "—"}</Info>
 
-                <div className="mb-3">
-                  <div className="text-xs text-gray-500">Telefon</div>
-                  <div className="font-medium">{client.phone || "—"}</div>
-                </div>
+                  <Info label="Phone">{client.phone || "—"}</Info>
 
-                <div className="mb-3">
-                  <div className="text-xs text-gray-500">Adres</div>
-                  <div className="font-medium">
+                  <Info label="Address">
                     {client.address || "—"}
                     {client.city ? `, ${client.city}` : ""}
                     {client.postal_code ? ` ${client.postal_code}` : ""}
                     {client.country ? `, ${client.country}` : ""}
-                  </div>
+                  </Info>
+
+                  {client.notes && (
+                    <div className="mt-3">
+                      <div className="text-xs text-textSecondary mb-0.5">
+                        Notes
+                      </div>
+                      <div className="text-sm text-textPrimary">
+                        {client.notes}
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {client.notes && (
-                  <div className="mb-3">
-                    <div className="text-xs text-gray-500">Notatki</div>
-                    <div className="text-sm">{client.notes}</div>
-                  </div>
-                )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        <div className="flex justify-end gap-2 p-4 border-t">
-          <button
-            onClick={onClose}
-            className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300"
-          >
-            Zamknij
-          </button>
+          {/* FOOTER */}
+          <div className="flex justify-end gap-2 px-5 py-4 border-t border-borderSoft bg-section">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm font-medium
+                         border border-borderMedium
+                         text-primary hover:bg-accent/30 transition"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ================= HELPERS ================= */
+
+function Info({ label, children }) {
+  return (
+    <div className="mb-3">
+      <div className="text-xs text-textSecondary">{label}</div>
+      <div className="text-sm font-medium text-textPrimary">{children}</div>
     </div>
   );
 }

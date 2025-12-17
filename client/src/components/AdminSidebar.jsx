@@ -1,15 +1,15 @@
-// src/components/AdminSidebar.jsx
 import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
+const FALLBACK_AVATAR = "/avatars/default-admin.png";
+
 export default function AdminSidebar({ user: userProp, avatar: avatarProp }) {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  const fallbackLogo = "/logo192.png";
-  const [avatarUrl, setAvatarUrl] = useState(avatarProp || fallbackLogo);
+  const [avatarUrl, setAvatarUrl] = useState(avatarProp || FALLBACK_AVATAR);
 
   const nav = [
     { to: "/admin", label: "Dashboard" },
@@ -20,20 +20,23 @@ export default function AdminSidebar({ user: userProp, avatar: avatarProp }) {
     { to: "/admin/payments", label: "Payments" },
     { to: "/admin/reports", label: "Reports" },
     { to: "/admin/profile", label: "Profile" },
-    { to: "/admin/settings", label: "Settings" },
   ];
 
   useEffect(() => {
-    // jeśli avatar przekazany — nie fetchujemy
-    if (avatarProp) return;
+    if (avatarProp) {
+      setAvatarUrl(avatarProp);
+      return;
+    }
 
-    // jeśli user z props ma avatar
     if (userProp?.avatar_url) {
       setAvatarUrl(`${API_BASE}${userProp.avatar_url}`);
       return;
     }
 
-    if (!token) return;
+    if (!token) {
+      setAvatarUrl(FALLBACK_AVATAR);
+      return;
+    }
 
     let cancelled = false;
 
@@ -42,6 +45,7 @@ export default function AdminSidebar({ user: userProp, avatar: avatarProp }) {
         const res = await fetch(`${API_BASE}/api/profile`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+
         if (!res.ok) return;
 
         const body = await res.json();
@@ -49,44 +53,51 @@ export default function AdminSidebar({ user: userProp, avatar: avatarProp }) {
           setAvatarUrl(`${API_BASE}${body.user.avatar_url}`);
         }
       } catch (e) {
-        console.error("AdminSidebar fetch error:", e);
+        console.error("AdminSidebar avatar fetch error:", e);
+        setAvatarUrl(FALLBACK_AVATAR);
       }
     })();
 
-    return () => (cancelled = true);
+    return () => {
+      cancelled = true;
+    };
   }, [userProp, avatarProp, token]);
 
   return (
-    <aside className="w-64 bg-white border-r min-h-screen">
-      <div className="p-4 flex items-center gap-3 border-b border-t">
+    <aside className="w-64 min-h-screen bg-navbar border-r border-borderSoft flex flex-col">
+      {/* HEADER */}
+      <div className="px-4 py-5 flex items-center gap-3 border-b border-borderSoft">
         <img
           src={avatarUrl}
-          className="h-10 w-10 object-cover rounded"
           alt="Avatar"
+          className="h-11 w-11 rounded-xl object-cover border border-borderSoft"
           onError={(e) => {
-            e.currentTarget.src = fallbackLogo;
+            e.currentTarget.src = FALLBACK_AVATAR;
           }}
         />
-        <div>
-          <div className="font-semibold">Admin</div>
-          <div className="text-xs text-gray-500">Panel</div>
+
+        <div className="leading-tight">
+          <div className="font-semibold text-textPrimary">Admin</div>
+          <div className="text-xs text-textSecondary">Admin Panel</div>
         </div>
       </div>
 
-      <nav className="p-4">
+      {/* NAV */}
+      <nav className="flex-1 px-3 py-4">
         <ul className="space-y-1">
           {nav.map((item) => (
             <li key={item.to}>
               <NavLink
                 to={item.to}
-                className={({ isActive }) =>
-                  `block px-3 py-2 rounded-md ${
-                    isActive
-                      ? "bg-indigo-50 text-indigo-700 font-medium"
-                      : "text-gray-700 hover:bg-gray-50"
-                  }`
-                }
                 end={item.to === "/admin"}
+                className={({ isActive }) =>
+                  [
+                    "block px-3 py-2 rounded-xl text-sm font-medium transition-all",
+                    isActive
+                      ? "bg-accent text-primary shadow-sm"
+                      : "text-textPrimary hover:bg-accent/30",
+                  ].join(" ")
+                }
               >
                 {item.label}
               </NavLink>

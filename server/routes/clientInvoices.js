@@ -6,7 +6,6 @@ import { auth } from "../middleware/auth.js";
 const router = express.Router();
 
 /**
- * KLIENT – lista własnych faktur
  * GET /api/invoices/client
  */
 router.get("/client", auth, async (req, res) => {
@@ -52,7 +51,7 @@ router.get("/client", auth, async (req, res) => {
 });
 
 /**
- * GET /api/invoices/:id (client or admin can access depending on role / ownership)
+ * GET /api/invoices/:id
  */
 router.get("/:id", auth, async (req, res) => {
   try {
@@ -78,17 +77,11 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 /**
- * Klient lub admin — zgłoszenie, że zapłacił (nie potwierdzenie przez admina)
  * POST /api/invoices/:id/pay
- *
- * Zmienia status na PENDING_CONFIRMATION i zapisuje opcjonalne dane płatności
  */
-// routes/clientInvoices.js — replace the /:id/pay handler with this
 router.post("/:id/pay", auth, async (req, res) => {
   try {
     const { id } = req.params;
-    // optional body fields (we ignore them if you don't store them)
-    // const { method = null, note = null } = req.body || {};
 
     const invRes = await pool.query("SELECT * FROM invoices WHERE id=$1", [id]);
     const inv = invRes.rows[0];
@@ -97,12 +90,10 @@ router.post("/:id/pay", auth, async (req, res) => {
     if (req.user.role !== "ADMIN" && req.user.id !== inv.client_id)
       return res.status(403).json({ error: "Brak dostępu" });
 
-    // If already PAID, return current
     if (inv.status === "PAID") {
       return res.json(inv);
     }
 
-    // Only update status and updated_at — do not touch non-existing columns
     const { rows } = await pool.query(
       `UPDATE invoices
          SET status = 'PENDING_CONFIRMATION',

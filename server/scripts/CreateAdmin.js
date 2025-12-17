@@ -1,6 +1,6 @@
 // scripts/createAdmin.js
 import bcrypt from "bcrypt";
-import { pool } from "../db.js"; // dostosuj ścieżkę
+import { pool } from "../db.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -8,7 +8,7 @@ async function main() {
   const email = "admin@example.com";
   const name = "Administrator";
   //tech@example.com C5G80adESb6)
-  const password = "SuperSecretAdmin123!"; // zmień natychmiast po stworzeniu
+  const password = "SuperSecretAdmin123!";
   const hashed = await bcrypt.hash(password, 10);
   const role = "ADMIN";
 

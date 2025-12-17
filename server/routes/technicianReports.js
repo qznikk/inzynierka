@@ -40,7 +40,6 @@ function safeParseJson(val) {
 
 /**
  * GET /api/technician/reports
- * returns all reports created by the logged-in technician, with job info and photos
  */
 router.get("/reports", auth, requireRole("TECHNICIAN"), async (req, res) => {
   try {
@@ -78,7 +77,6 @@ router.get("/reports", auth, requireRole("TECHNICIAN"), async (req, res) => {
 
 /**
  * GET /api/technician/reports/:jobId
- * returns reports for a given job (if the report's technician is the logged-in tech)
  */
 router.get(
   "/reports/:jobId",
@@ -130,7 +128,6 @@ router.get(
 
 /**
  * POST /api/technician/jobs/:jobId/reports
- * create report for a job
  */
 router.post(
   "/jobs/:jobId/reports",
@@ -171,7 +168,6 @@ router.post(
         );
       }
 
-      // fetch with photos
       const rpt = await pool.query(
         `SELECT r.*,
           COALESCE(json_agg(json_build_object('id', p.id, 'file_path', p.file_path, 'original_name', p.original_name)) FILTER (WHERE p.id IS NOT NULL), '[]') as photos
@@ -201,7 +197,6 @@ router.post(
 
 /**
  * PUT /api/technician/reports/:reportId
- * update report description (only owner technician)
  */
 router.put(
   "/reports/:reportId",
@@ -241,7 +236,6 @@ router.put(
 
 /**
  * POST /api/technician/reports/:reportId/photos
- * add photos to existing report
  */
 router.post(
   "/reports/:reportId/photos",
@@ -274,7 +268,6 @@ router.post(
         );
       }
 
-      // return updated photos
       const rp = await pool.query(
         `SELECT COALESCE(json_agg(json_build_object('id', p.id, 'file_path', p.file_path, 'original_name', p.original_name)) FILTER (WHERE p.id IS NOT NULL), '[]') as photos
            FROM report_photos p
@@ -299,7 +292,6 @@ router.post(
 
 /**
  * DELETE /api/technician/reports/photos/:photoId
- * delete photo (file + db) if belongs to technician's report
  */
 router.delete(
   "/reports/photos/:photoId",
@@ -310,7 +302,6 @@ router.delete(
       const techId = req.user?.id;
       const { photoId } = req.params;
 
-      // get photo + report
       const q = `
           SELECT p.id as photo_id, p.file_path, p.report_id, r.technician_id
           FROM report_photos p
@@ -326,7 +317,6 @@ router.delete(
           .json({ error: "Not allowed to delete this photo" });
       }
 
-      // delete file from disk if exists
       try {
         const abs = path.join(process.cwd(), "uploads", row.file_path);
         if (fs.existsSync(abs)) fs.unlinkSync(abs);
@@ -334,7 +324,6 @@ router.delete(
         console.warn("Failed to remove file:", e);
       }
 
-      // delete db row
       await pool.query("DELETE FROM report_photos WHERE id = $1", [photoId]);
 
       return res.json({ success: true });

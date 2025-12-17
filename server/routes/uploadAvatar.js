@@ -6,7 +6,6 @@ import { pool } from "../db.js";
 
 const router = express.Router();
 
-// Storage config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/avatars");
@@ -20,7 +19,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// POST /api/upload/avatar
 router.post("/avatar", auth, upload.single("avatar"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "Brak pliku" });

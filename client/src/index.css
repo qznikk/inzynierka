@@ -1,7 +1,144 @@
-/* index.css — wymagany dla TailwindCSS */
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Możesz tu dodać własne globalne style, jeśli chcesz */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+@layer components {
+  .ui-input {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+
+    background: var(--bg-section);
+    color: var(--text-primary);
+    border: 1px solid var(--border-medium);
+  }
+
+  .ui-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring);
+  }
+
+  .ui-btn-primary {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+
+    background: var(--brand-primary);
+    color: white;
+    transition: background 0.2s;
+  }
+
+  .ui-btn-primary:hover {
+    background: var(--brand-primary-hover);
+  }
+
+  .ui-btn-outline {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+
+    border: 1px solid var(--border-medium);
+    color: var(--brand-primary);
+    transition: background 0.2s;
+  }
+
+  .ui-btn-outline:hover {
+    background: color-mix(in srgb, var(--brand-accent) 30%, transparent);
+  }
+}
+
+/* ================= FULLCALENDAR THEME OVERRIDES ================= */
+
+/* main text */
+.fc {
+  color: var(--text-primary);
+}
+
+/* header (month, week, buttons text) */
+.fc .fc-toolbar-title {
+  color: var(--text-primary);
+}
+
+/* buttons */
+.fc .fc-button {
+  background: transparent;
+  border: 1px solid var(--border-medium);
+  color: var(--text-primary);
+}
+
+.fc .fc-button:hover {
+  background: var(--brand-accent);
+  color: var(--brand-primary);
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: #fff;
+}
+
+/* day numbers */
+.fc .fc-daygrid-day-number {
+  color: var(--text-secondary);
+}
+
+/* grid borders */
+.fc-theme-standard td,
+.fc-theme-standard th {
+  border-color: var(--border-soft);
+}
+
+/* today highlight */
+.fc .fc-day-today {
+  background: color-mix(
+    in srgb,
+    var(--brand-accent) 12%,
+    transparent
+  ) !important;
+}
+
+/* event text */
+.fc-event {
+  color: var(--text-primary);
+}
+
+/* popover (more events) */
+.fc-popover {
+  background: var(--bg-modal);
+  border: 1px solid var(--border-soft);
+  color: var(--text-primary);
+}
+
+/* time grid */
+.fc-timegrid-slot-label {
+  color: var(--text-secondary);
+}
+
+.fc-theme-standard th {
+  background: var(--bg-section);
+}
+
+.fc-theme-standard thead tr,
+.fc-theme-standard thead th {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.fc .fc-scrollgrid {
+  border: none;
+}
+
+.fc-theme-standard td,
+.fc-theme-standard th {
+  border-color: var(--border-soft);
+}

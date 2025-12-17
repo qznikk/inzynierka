@@ -15,7 +15,7 @@ function createToken(user) {
 // REGISTER
 router.post("/register", async (req, res) => {
   const { email, password, name } = req.body;
-  const role = "CLIENT"; // wymuszamy tylko rejestrację klientów
+  const role = "CLIENT";
 
   if (!email || !password || !name) {
     return res.status(400).json({ error: "Missing fields" });

@@ -1,13 +1,24 @@
 import React, { useEffect, useState, useCallback } from "react";
 import JobDetailsModalTechnician from "../../components/JobDetailsModalTechnician";
+import { useNotify } from "../../notifications/NotificationContext";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
+const STATUS_BADGE = {
+  WAITING: "var(--status-waiting)",
+  TO_ASSIGN: "var(--status-danger)",
+  ASSIGNED: "var(--status-info)",
+  IN_PROGRESS: "var(--status-success)",
+  DONE: "var(--status-muted)",
+  CANCELLED: "var(--status-muted)",
+};
+
 export default function TechnicianJobs() {
   const token = localStorage.getItem("token");
+  const notify = useNotify();
+
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
   const [jobDetailsId, setJobDetailsId] = useState(null);
 
   const buildHeaders = (extra = {}) => {
@@ -18,45 +29,35 @@ export default function TechnicianJobs() {
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
-    setMessage("");
-
     try {
       const res = await fetch(`${API_BASE}/api/technician/jobs`, {
         headers: buildHeaders(),
       });
 
-      let body = null;
-      try {
-        body = await res.json();
-      } catch {}
+      const body = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const errMsg =
-          (body && (body.error || body.message)) ||
-          `${res.status} ${res.statusText}`;
-        throw new Error(errMsg);
+        throw new Error(body.error || body.message || "Failed to load jobs");
       }
 
       const allJobs = body.jobs || body || [];
 
-      // ⛔ POKAZUJEMY TYLKO AKTYWNE (NIE DONE)
-      const active = allJobs.filter((j) => j.status?.toUpperCase() !== "DONE");
-
-      setJobs(active);
+      // only active jobs
+      setJobs(allJobs.filter((j) => j.status?.toUpperCase() !== "DONE"));
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd podczas pobierania zleceń");
+      notify.error(err.message || "Error while fetching jobs");
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, notify]);
 
   useEffect(() => {
+    if (!token) return;
     fetchJobs();
-  }, [fetchJobs]);
+  }, [token, fetchJobs]);
 
   async function updateStatus(jobId, newStatus) {
-    setMessage("");
     try {
       const res = await fetch(`${API_BASE}/api/technician/jobs/${jobId}`, {
         method: "PUT",
@@ -64,22 +65,22 @@ export default function TechnicianJobs() {
         body: JSON.stringify({ status: newStatus }),
       });
 
-      let body = null;
-      try {
-        body = await res.json();
-      } catch {}
+      const body = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        const errMsg =
-          (body && (body.error || body.message)) ||
-          `${res.status} ${res.statusText}`;
-        throw new Error(errMsg);
+        throw new Error(body.error || body.message || "Update failed");
       }
 
-      await fetchJobs(); // odświeża listę -> DONE zniknie
+      notify.success(
+        newStatus === "DONE"
+          ? "The job has been completed"
+          : "Job status updated"
+      );
+
+      fetchJobs();
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd przy aktualizacji statusu");
+      notify.error(err.message || "Error updating job status");
     }
   }
 
@@ -92,45 +93,43 @@ export default function TechnicianJobs() {
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Twoje zlecenia</h1>
-        <button
-          onClick={() => fetchJobs()}
-          className="px-3 py-2 bg-indigo-600 text-white rounded"
-        >
-          Odśwież
+        <h1 className="text-2xl font-semibold text-textPrimary">Your jobs</h1>
+        <button onClick={fetchJobs} className="ui-btn-outline">
+          Refresh
         </button>
       </header>
 
-      <section className="bg-white p-4 rounded shadow space-y-4">
-        {message && <div className="text-sm text-red-600">{message}</div>}
-
+      <section className="bg-section p-4 rounded-2xl border border-borderSoft">
         <div className="overflow-x-auto">
-          <table className="min-w-full table-auto">
+          <table className="min-w-full table-auto text-sm">
             <thead>
-              <tr className="text-left text-sm text-gray-600">
-                <th className="px-3 py-2">Nr</th>
-                <th className="px-3 py-2">Tytuł</th>
-                <th className="px-3 py-2">Klient</th>
-                <th className="px-3 py-2">Data</th>
+              <tr className="text-left text-textSecondary border-b border-borderSoft">
+                <th className="px-3 py-2">No.</th>
+                <th className="px-3 py-2">Title</th>
+                <th className="px-3 py-2">Client</th>
+                <th className="px-3 py-2">Date</th>
                 <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Akcje</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="px-3 py-6 text-center">
-                    Ładowanie...
+                  <td
+                    colSpan="6"
+                    className="px-3 py-6 text-center text-textSecondary"
+                  >
+                    Loading…
                   </td>
                 </tr>
               ) : jobs.length === 0 ? (
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-3 py-6 text-center text-gray-500"
+                    className="px-3 py-6 text-center text-textSecondary"
                   >
-                    Brak aktywnych zleceń.
+                    No active jobs.
                   </td>
                 </tr>
               ) : (
@@ -138,68 +137,75 @@ export default function TechnicianJobs() {
                   const status = j.status?.toUpperCase();
 
                   return (
-                    <tr key={j.id} className="even:bg-gray-50">
+                    <tr
+                      key={j.id}
+                      className="border-b border-borderSoft last:border-none"
+                    >
                       <td className="px-3 py-2 align-top">
-                        <div className="font-medium">
+                        <div className="font-medium text-textPrimary">
                           {j.external_number || `#${j.id}`}
                         </div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-textSecondary">
                           {j.priority === 1
-                            ? "Wysoki"
+                            ? "High"
                             : j.priority === 3
-                            ? "Niski"
-                            : "Normalny"}
+                            ? "Low"
+                            : "Normal"}
                         </div>
                       </td>
 
                       <td className="px-3 py-2 align-top">
-                        <div>{j.title}</div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-textPrimary">{j.title}</div>
+                        <div className="text-xs text-textSecondary">
                           {j.description?.slice(0, 80)}
                         </div>
                       </td>
 
-                      <td className="px-3 py-2 align-top">
-                        <div>{j.client_name || j.client_email || "—"}</div>
+                      <td className="px-3 py-2 align-top text-textPrimary">
+                        {j.client_name || j.client_email || "—"}
                       </td>
 
-                      <td className="px-3 py-2 align-top">
+                      <td className="px-3 py-2 align-top text-textPrimary">
                         {formatDate(j.scheduled_date || j.created_at)}
                       </td>
 
                       <td className="px-3 py-2 align-top">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">{j.status}</span>
-
-                          <div className="flex gap-1">
-                            {status !== "IN_PROGRESS" && (
-                              <button
-                                onClick={() =>
-                                  updateStatus(j.id, "IN_PROGRESS")
-                                }
-                                className="px-2 py-1 border rounded text-xs"
-                              >
-                                Rozpocznij
-                              </button>
-                            )}
-
-                            <button
-                              onClick={() => updateStatus(j.id, "DONE")}
-                              className="px-2 py-1 border rounded text-xs"
-                            >
-                              Zakończ
-                            </button>
-                          </div>
-                        </div>
+                        <span
+                          className="inline-block text-xs font-medium px-2 py-1 rounded"
+                          style={{
+                            background: `color-mix(in srgb, ${STATUS_BADGE[status]} 20%, transparent)`,
+                            color: STATUS_BADGE[status],
+                          }}
+                        >
+                          {j.status}
+                        </span>
                       </td>
 
                       <td className="px-3 py-2 align-top">
-                        <button
-                          onClick={() => setJobDetailsId(j.id)}
-                          className="px-2 py-1 border rounded text-sm"
-                        >
-                          Szczegóły
-                        </button>
+                        <div className="flex gap-2 flex-wrap">
+                          {status !== "IN_PROGRESS" && (
+                            <button
+                              onClick={() => updateStatus(j.id, "IN_PROGRESS")}
+                              className="ui-btn-outline text-xs"
+                            >
+                              Start
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => updateStatus(j.id, "DONE")}
+                            className="ui-btn-outline text-xs"
+                          >
+                            Complete
+                          </button>
+
+                          <button
+                            onClick={() => setJobDetailsId(j.id)}
+                            className="ui-btn-outline text-xs"
+                          >
+                            Details
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

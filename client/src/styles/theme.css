@@ -1,0 +1,54 @@
+:root {
+  --bg-overlay: rgba(0, 0, 0, 0.4);
+  --bg-modal: #ffffff;
+  --bg-section: #fbfafd;
+  --bg-navbar: #ecf4e8;
+
+  --border-soft: rgba(30, 71, 67, 0.1);
+  --border-medium: rgba(30, 71, 67, 0.2);
+
+  --text-primary: #242b24;
+  --text-secondary: #595e58;
+
+  --brand-primary: #1e4743;
+  --brand-primary-hover: #163733;
+  --brand-accent: #bcf49c;
+
+  --focus-ring: rgba(188, 244, 156, 0.4);
+  --status-waiting: #facc15;
+  --status-danger: #ef4444;
+  --status-info: #3b82f6;
+  --status-success: #10b981;
+  --status-muted: #9ca3af;
+}
+
+[data-theme="dark"] {
+  /* ===== BACKGROUNDS ===== */
+  --bg-overlay: rgba(0, 0, 0, 0.7);
+  --bg-modal: #0f1b1a;
+  --bg-section: #132322;
+  --bg-navbar: #0d1a19;
+
+  /* ===== BORDERS ===== */
+  --border-soft: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.12);
+
+  /* ===== TEXT ===== */
+  --text-primary: #e6f1ef;
+  --text-secondary: #9fb8b4;
+
+  /* ===== BRAND ===== */
+  --brand-primary: #5fd3c2;
+  --brand-primary-hover: #7be3d5;
+  --brand-accent: #2f6f66;
+
+  /* ===== FOCUS ===== */
+  --focus-ring: rgba(95, 211, 194, 0.45);
+
+  /* ===== STATUS ===== */
+  --status-waiting: #eab308;
+  --status-danger: #f87171;
+  --status-info: #60a5fa;
+  --status-success: #34d399;
+  --status-muted: #6b7280;
+}

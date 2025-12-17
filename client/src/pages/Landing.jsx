@@ -1,60 +1,160 @@
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
 
-export default function Landing() {
+export default function LandingPage() {
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(document.documentElement.getAttribute("data-theme") === "dark");
+    };
+
+    checkTheme();
+
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* NAVBAR */}
-      <nav className="w-full bg-white shadow-sm p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-blue-600">HVAC Manager</h1>
+    <div className="bg-section text-textPrimary">
+      {/* ================= HERO ================= */}
+      <section className="pt-16">
+        <div className="max-w-7xl mx-auto px-6 py-24 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-bold leading-tight">
+              Order services online.
+              <span className="block text-primary">
+                Track everything in one place.
+              </span>
+            </h1>
 
-        <div className="flex gap-6">
-          <a href="#" className="text-gray-700 hover:text-blue-600">
-            O nas
-          </a>
-          <a href="#" className="text-gray-700 hover:text-blue-600">
-            Funkcje
-          </a>
-          <a href="#" className="text-gray-700 hover:text-blue-600">
-            Kontakt
-          </a>
+            <p className="mt-6 text-lg text-textSecondary max-w-xl">
+              Use your client account to easily submit service requests, track
+              their progress, access reports and invoices, and keep your full
+              service history in one clear panel.
+            </p>
+
+            <p className="mt-4 text-sm text-textSecondary max-w-xl">
+              To get started, create an account or log in using the menu above.
+            </p>
+          </div>
+
+          <div className="flex justify-center">
+            <img
+              src={
+                isDark ? "/clientdashboard-dark.png" : "/clientdashboard.png"
+              }
+              alt="Client dashboard preview"
+              className="rounded-2xl max-h-96 w-auto border border-borderSoft"
+            />
+          </div>
         </div>
-      </nav>
+      </section>
 
-      {/* HERO SECTION */}
-      <div className="flex flex-1 items-center justify-center flex-col text-center p-10">
-        <h2 className="text-4xl font-bold mb-6 text-gray-800">
-          Zarządzaj zleceniami HVAC w jednym miejscu
-        </h2>
+      {/* ================= BENEFITS ================= */}
+      <section className="bg-navbar py-20">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <h2 className="text-3xl font-semibold text-textPrimary">
+            Why use a client account?
+          </h2>
 
-        <p className="text-lg text-gray-600 max-w-2xl mb-10">
-          Wybierz panel użytkownika, aby przejść do odpowiedniej części systemu.
-          To tylko tryb demonstracyjny (bez logowania).
-        </p>
-
-        {/* BUTTONS */}
-        <div className="flex gap-6">
-          <Link
-            to="/client"
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700"
-          >
-            Panel klienta
-          </Link>
-
-          <Link
-            to="/technician"
-            className="bg-green-600 text-white px-6 py-3 rounded-lg text-lg font-semibold hover:bg-green-700"
-          >
-            Panel technika
-          </Link>
-
-          <Link
-            to="/admin"
-            className="bg-red-600 text-white px-6 py-3 rounded-lg text-lg font-semibold hover:bg-red-700"
-          >
-            Panel admina
-          </Link>
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <Benefit
+              title="Easy service requests"
+              text="Submit service jobs quickly without phone calls or emails."
+            />
+            <Benefit
+              title="Full transparency"
+              text="Always know the current status of your service request."
+            />
+            <Benefit
+              title="All documents in one place"
+              text="Access reports, invoices and job history anytime."
+            />
+          </div>
         </div>
+      </section>
+
+      {/* ================= HOW IT WORKS ================= */}
+      <section className="py-20">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <h2 className="text-3xl font-semibold text-textPrimary">
+            How it works
+          </h2>
+
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <Step number="1" title="Create an account">
+              Register once to access your personal client panel.
+            </Step>
+            <Step number="2" title="Submit a service request">
+              Describe the issue and send a job request online.
+            </Step>
+            <Step number="3" title="Track & review">
+              Follow progress, receive reports and manage invoices.
+            </Step>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= CLIENT PANEL ================= */}
+      <section className="bg-navbar py-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <h2 className="text-3xl font-semibold text-center text-textPrimary">
+            Everything available in your client panel
+          </h2>
+
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <Feature title="Job tracking">
+              See the current status of all your service requests.
+            </Feature>
+            <Feature title="Service reports">
+              View detailed reports created after job completion.
+            </Feature>
+            <Feature title="Invoices">
+              Check invoices and confirm payments online.
+            </Feature>
+            <Feature title="Service history">
+              Full history of completed and ongoing services.
+            </Feature>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ================= COMPONENTS ================= */
+
+function Benefit({ title, text }) {
+  return (
+    <div className="bg-modal p-6 rounded-2xl border border-borderSoft transition hover:shadow-sm">
+      <h3 className="font-semibold text-lg text-primary">{title}</h3>
+      <p className="mt-2 text-textSecondary text-sm">{text}</p>
+    </div>
+  );
+}
+
+function Feature({ title, children }) {
+  return (
+    <div className="bg-modal p-6 rounded-2xl border border-borderSoft transition hover:shadow-sm">
+      <h3 className="font-semibold text-primary">{title}</h3>
+      <p className="mt-2 text-sm text-textSecondary">{children}</p>
+    </div>
+  );
+}
+
+function Step({ number, title, children }) {
+  return (
+    <div className="bg-modal p-6 rounded-2xl border border-borderSoft transition hover:shadow-sm text-left">
+      <div className="w-10 h-10 flex items-center justify-center rounded-full bg-accent text-primary font-bold">
+        {number}
       </div>
+      <h3 className="mt-4 font-semibold text-primary">{title}</h3>
+      <p className="mt-2 text-sm text-textSecondary">{children}</p>
     </div>
   );
 }

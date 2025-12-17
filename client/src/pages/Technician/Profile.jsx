@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useRef } from "react";
+import { useNotify } from "../../notifications/NotificationContext";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5050";
+const FALLBACK_AVATAR = "/avatars/default-technician.png";
 
 export default function TechnicianProfile() {
   const token = localStorage.getItem("token");
+  const notify = useNotify();
+
   const [user, setUser] = useState(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -15,7 +19,6 @@ export default function TechnicianProfile() {
     phone: "",
   });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
   const fileInputRef = useRef(null);
 
   const buildHeaders = (extra = {}) => {
@@ -25,13 +28,12 @@ export default function TechnicianProfile() {
   };
 
   useEffect(() => {
+    if (!token) return;
     fetchProfile();
-    // eslint-disable-next-line
-  }, []);
+  }, [token]);
 
   async function fetchProfile() {
     setLoading(true);
-    setMessage("");
     try {
       const res = await fetch(`${API_BASE}/api/profile`, {
         headers: buildHeaders({ "Content-Type": "application/json" }),
@@ -39,6 +41,7 @@ export default function TechnicianProfile() {
       const body = await res.json();
       if (!res.ok)
         throw new Error(body.error || body.message || `${res.status}`);
+
       setUser(body.user || null);
       setForm({
         name: body.user?.name || "",
@@ -50,7 +53,7 @@ export default function TechnicianProfile() {
       });
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd pobierania profilu technika");
+      notify.error(err.message || "Failed to load technician profile");
     } finally {
       setLoading(false);
     }
@@ -61,7 +64,6 @@ export default function TechnicianProfile() {
 
   async function save() {
     setLoading(true);
-    setMessage("");
     try {
       const res = await fetch(`${API_BASE}/api/profile`, {
         method: "PUT",
@@ -71,12 +73,13 @@ export default function TechnicianProfile() {
       const body = await res.json();
       if (!res.ok)
         throw new Error(body.error || body.message || `${res.status}`);
+
       setUser(body.user);
       setEditing(false);
-      setMessage("Zapisano pomyślnie.");
+      notify.success("Profile has been saved");
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd zapisu");
+      notify.error(err.message || "Failed to save profile");
     } finally {
       setLoading(false);
     }
@@ -89,24 +92,25 @@ export default function TechnicianProfile() {
     if (!file) return;
 
     const maxMB = 5;
+
     if (!file.type.startsWith("image/")) {
-      setMessage("Plik musi być obrazem.");
+      notify.error("The file must be an image");
       return;
     }
+
     if (file.size > maxMB * 1024 * 1024) {
-      setMessage(`Plik za duży — max ${maxMB} MB.`);
+      notify.error(`File too large — max ${maxMB} MB`);
       return;
     }
 
     setLoading(true);
-    setMessage("");
     try {
       const fd = new FormData();
       fd.append("avatar", file);
 
       const res = await fetch(`${API_BASE}/api/upload/avatar`, {
         method: "POST",
-        headers: buildHeaders(), // don't set Content-Type for FormData
+        headers: buildHeaders(),
         body: fd,
       });
 
@@ -115,108 +119,85 @@ export default function TechnicianProfile() {
         throw new Error(data.error || data.message || `${res.status}`);
 
       setUser((u) => ({ ...u, avatar_url: data.avatar_url }));
-      setMessage("Avatar załadowany.");
+      notify.success("Avatar has been updated");
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd uploadu");
+      notify.error(err.message || "Avatar upload failed");
     } finally {
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  if (loading && !user) return <div>Ładowanie profilu technika…</div>;
+  if (loading && !user)
+    return (
+      <div className="text-textSecondary">Loading technician profile…</div>
+    );
 
   return (
     <div className="space-y-6 max-w-3xl">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Profil technika</h1>
-        <div>
-          {!editing ? (
+        <h1 className="text-2xl font-semibold text-textPrimary">
+          Technician profile
+        </h1>
+
+        {!editing ? (
+          <button onClick={() => setEditing(true)} className="ui-btn-primary">
+            Edit
+          </button>
+        ) : (
+          <div className="flex gap-2">
             <button
-              onClick={() => setEditing(true)}
-              className="px-3 py-2 bg-indigo-600 text-white rounded"
+              onClick={save}
+              disabled={loading}
+              className="ui-btn-primary disabled:opacity-60"
             >
-              Edytuj
+              Save
             </button>
-          ) : (
-            <>
-              <button
-                onClick={save}
-                disabled={loading}
-                className="mr-2 px-3 py-2 bg-green-600 text-white rounded"
-              >
-                Zapisz
-              </button>
-              <button
-                onClick={() => {
-                  setEditing(false);
-                  setForm({
-                    name: user?.name || "",
-                    address: user?.address || "",
-                    city: user?.city || "",
-                    postal_code: user?.postal_code || "",
-                    country: user?.country || "",
-                    phone: user?.phone || "",
-                  });
-                  setMessage("");
-                }}
-                className="px-3 py-2 bg-gray-300 rounded"
-              >
-                Anuluj
-              </button>
-            </>
-          )}
-        </div>
+            <button
+              onClick={() => {
+                setEditing(false);
+                setForm({
+                  name: user?.name || "",
+                  address: user?.address || "",
+                  city: user?.city || "",
+                  postal_code: user?.postal_code || "",
+                  country: user?.country || "",
+                  phone: user?.phone || "",
+                });
+              }}
+              className="ui-btn-outline"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </header>
 
-      {message && <div className="text-sm text-red-600">{message}</div>}
+      <section className="bg-section p-6 rounded-2xl border border-borderSoft space-y-6">
+        {/* AVATAR */}
+        <div className="flex items-center gap-6">
+          <img
+            src={
+              user?.avatar_url
+                ? `${API_BASE}${user.avatar_url}`
+                : FALLBACK_AVATAR
+            }
+            alt="avatar"
+            className={`w-20 h-20 rounded-full object-cover border border-borderSoft ${
+              editing ? "cursor-pointer ring-2 ring-[var(--focus-ring)]" : ""
+            }`}
+            onClick={() => editing && triggerFile()}
+            onError={(e) => {
+              e.currentTarget.src = FALLBACK_AVATAR;
+            }}
+          />
 
-      <section className="bg-white p-4 rounded shadow space-y-4">
-        <div className="flex items-center space-x-4">
-          {/* avatar - klikalny tylko w trybie edycji */}
-          {user?.avatar_url ? (
-            <img
-              src={`${API_BASE}${user.avatar_url}`}
-              alt="avatar"
-              className={`w-20 h-20 rounded-full object-cover ${
-                editing ? "cursor-pointer ring-2 ring-indigo-200" : ""
-              }`}
-              onClick={() => {
-                if (editing) triggerFile();
-              }}
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = ""; // fallback left as empty so "brak" shows
-              }}
-            />
-          ) : (
-            <div
-              className={`w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 ${
-                editing ? "cursor-pointer ring-2 ring-indigo-200" : ""
-              }`}
-              onClick={() => {
-                if (editing) triggerFile();
-              }}
-            >
-              brak
-            </div>
-          )}
-
-          <div className="flex flex-col">
-            {/* przycisk widoczny tylko w edycji */}
+          <div className="space-y-2">
             {editing && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={triggerFile}
-                  className="px-3 py-1 border rounded text-sm bg-white"
-                >
-                  Wybierz zdjęcie
-                </button>
-                <span className="text-sm text-gray-500">
-                  {user?.avatar_url ? "Avatar załadowany" : "Brak avatara"}
-                </span>
-              </div>
+              <button onClick={triggerFile} className="ui-btn-outline text-sm">
+                Change avatar
+              </button>
             )}
 
             <input
@@ -227,82 +208,90 @@ export default function TechnicianProfile() {
               onChange={handleAvatarUpload}
             />
 
-            <div className="mt-2">
-              <div className="text-sm text-gray-500">Rola</div>
-              <div className="font-medium">{user?.role || "—"}</div>
+            <div>
+              <div className="text-xs text-textSecondary">Role</div>
+              <div className="font-medium text-textPrimary">
+                {user?.role || "—"}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-xs text-gray-600">Imię / nazwa</label>
+        {/* FORM */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Name / Company name">
             <input
               name="name"
               value={form.name}
               onChange={onChange}
               disabled={!editing}
-              className="mt-1 w-full border rounded px-2 py-2"
+              className="ui-input w-full"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs text-gray-600">Telefon</label>
+          <Field label="Phone">
             <input
               name="phone"
               value={form.phone}
               onChange={onChange}
               disabled={!editing}
-              className="mt-1 w-full border rounded px-2 py-2"
+              className="ui-input w-full"
             />
-          </div>
+          </Field>
 
-          <div className="sm:col-span-2">
-            <label className="block text-xs text-gray-600">Adres</label>
+          <Field label="Address" className="sm:col-span-2">
             <input
               name="address"
               value={form.address}
               onChange={onChange}
               disabled={!editing}
-              className="mt-1 w-full border rounded px-2 py-2"
-              placeholder="ulica i numer"
+              className="ui-input w-full"
+              placeholder="Street and number"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs text-gray-600">Miasto</label>
+          <Field label="City">
             <input
               name="city"
               value={form.city}
               onChange={onChange}
               disabled={!editing}
-              className="mt-1 w-full border rounded px-2 py-2"
+              className="ui-input w-full"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs text-gray-600">Kod pocztowy</label>
+          <Field label="Postal code">
             <input
               name="postal_code"
               value={form.postal_code}
               onChange={onChange}
               disabled={!editing}
-              className="mt-1 w-full border rounded px-2 py-2"
+              className="ui-input w-full"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-xs text-gray-600">Kraj</label>
+          <Field label="Country">
             <input
               name="country"
               value={form.country}
               onChange={onChange}
               disabled={!editing}
-              className="mt-1 w-full border rounded px-2 py-2"
+              className="ui-input w-full"
             />
-          </div>
+          </Field>
         </div>
       </section>
+    </div>
+  );
+}
+
+/* ===================== HELPERS ===================== */
+
+function Field({ label, children, className = "" }) {
+  return (
+    <div className={className}>
+      <label className="block text-xs mb-1 text-textSecondary">{label}</label>
+      {children}
     </div>
   );
 }

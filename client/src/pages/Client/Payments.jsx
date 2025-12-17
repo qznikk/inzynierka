@@ -1,237 +1,123 @@
-// src/pages/Client/ClientInvoices.jsx
 import React, { useEffect, useState, useCallback } from "react";
+import { useNotify } from "../../notifications/NotificationContext";
+import InvoiceDetailsModal from "../../components/InvoiceDetailsModal";
+import ReportPaymentModal from "../../components/ReportPaymentModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
-function fmtDate(d) {
-  if (!d) return "";
-  try {
-    return new Date(d).toLocaleDateString();
-  } catch {
-    return "";
-  }
-}
-
 export default function ClientPayments() {
   const token = localStorage.getItem("token") || "";
+  const notify = useNotify();
+
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [page, setPage] = useState(1);
-  const [limit] = useState(50);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [showReportPayment, setShowReportPayment] = useState(false);
 
   const headers = {
-    Authorization: token ? `Bearer ${token}` : "",
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 
-  const loadInvoices = useCallback(
-    async (opts = {}) => {
-      setLoading(true);
-      setMessage("");
-      try {
-        const qp = new URLSearchParams();
-        qp.set("page", opts.page || page);
-        qp.set("limit", limit);
-        if (opts.status ?? statusFilter)
-          qp.set("status", opts.status ?? statusFilter);
-
-        const res = await fetch(
-          `${API_BASE}/api/invoices/client?${qp.toString()}`,
-          {
-            headers,
-          }
-        );
-        if (!res.ok) {
-          const body = await res.text().catch(() => "");
-          if (res.status === 401) {
-            setMessage("Nieautoryzowany. Zaloguj się ponownie.");
-            setInvoices([]);
-            setLoading(false);
-            return;
-          }
-          console.error("Invoices load error:", res.status, body);
-          setMessage(`Błąd pobierania faktur: ${res.status}`);
-          setInvoices([]);
-          setLoading(false);
-          return;
-        }
-        const data = await res.json().catch(() => null);
-        const list = (data && (data.invoices || data.jobs || [])) || [];
-        setInvoices(list);
-      } catch (err) {
-        console.error("Invoices load failed:", err);
-        setMessage("Błąd sieci przy pobieraniu faktur");
-        setInvoices([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [page, limit, statusFilter, token]
-  );
+  const loadInvoices = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/invoices/client`, { headers });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setInvoices(data.invoices || []);
+    } catch {
+      notify.error("Failed to load invoices");
+      setInvoices([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [notify, token]);
 
   useEffect(() => {
-    loadInvoices({ page });
-  }, [loadInvoices, page, statusFilter]);
+    if (!token) return;
+    loadInvoices();
+  }, [token, loadInvoices]);
 
-  async function markPaid(id) {
-    // zamiast confirm modal używamy confirm() — możesz podmienić na lepszy UI
-    const note = prompt(
-      "Opcjonalna notatka do płatności (np. nr przelewu):",
-      ""
-    );
-    if (
-      !confirm(
-        "Zgłosić płatność i ustawić status na 'Oczekiwanie na potwierdzenie'?"
-      )
-    )
-      return;
-
+  async function submitPayment(data) {
     try {
-      const res = await fetch(`${API_BASE}/api/invoices/${id}/pay`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ method: "manual", note }),
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.error("Mark paid error:", res.status, text);
-        if (res.status === 401) {
-          alert("Nieautoryzowany. Zaloguj się ponownie.");
-          return;
+      const res = await fetch(
+        `${API_BASE}/api/invoices/${selectedInvoice.id}/pay`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(data),
         }
-        alert(`Błąd przy zgłaszaniu płatności: ${res.status}`);
-        return;
-      }
-      const updated = await res.json().catch(() => null);
-
-      setInvoices((prev) =>
-        prev.map((inv) =>
-          inv.id === id
-            ? {
-                ...(updated || {}),
-                ...inv,
-                status: (updated && updated.status) || "PENDING_CONFIRMATION",
-              }
-            : inv
-        )
       );
-    } catch (err) {
-      console.error("Mark paid network error:", err);
-      alert("Błąd sieci. Spróbuj ponownie.");
+      if (!res.ok) throw new Error();
+
+      notify.success("Payment has been reported");
+      setShowReportPayment(false);
+      setSelectedInvoice(null);
+      loadInvoices();
+    } catch {
+      notify.error("Error reporting payment");
     }
   }
 
   return (
-    <div className="bg-white p-4 rounded shadow">
-      <header className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">Twoje faktury</h2>
-        <div className="flex items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="px-2 py-1 border rounded"
-          >
-            <option value="">Wszystkie</option>
-            <option value="ISSUED">Wystawione</option>
-            <option value="PENDING_CONFIRMATION">
-              Oczekujące potwierdzenia
-            </option>
-            <option value="PAID">Zapłacone</option>
-            <option value="CANCELLED">Anulowane</option>
-          </select>
-          <button
-            onClick={() => loadInvoices({ page: 1 })}
-            className="px-3 py-1 border rounded text-sm"
-          >
-            Odśwież
-          </button>
-        </div>
-      </header>
-
-      {message && <div className="text-red-600 mb-3">{message}</div>}
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold text-textPrimary">Your invoices</h1>
 
       {loading ? (
-        <div>Ładuję...</div>
+        <div className="text-textSecondary">Loading…</div>
       ) : invoices.length === 0 ? (
-        <div>Brak faktur</div>
+        <div className="text-textSecondary">No invoices</div>
       ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="text-left text-gray-600">
-                <tr>
-                  <th className="px-2 py-2">Nr</th>
-                  <th className="px-2 py-2">Kwota</th>
-                  <th className="px-2 py-2">Status</th>
-                  <th className="px-2 py-2">Data</th>
-                  <th className="px-2 py-2">Akcje</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id} className="border-t">
-                    <td className="px-2 py-2">
-                      {inv.external_number || `#${inv.id}`}
-                    </td>
-                    <td className="px-2 py-2">
-                      {Number(inv.amount || 0).toFixed(2)}{" "}
-                      {inv.currency || "PLN"}
-                    </td>
-                    <td className="px-2 py-2">
-                      {inv.status === "PENDING_CONFIRMATION"
-                        ? "Oczekiwanie na potwierdzenie"
-                        : inv.status}
-                    </td>
-                    <td className="px-2 py-2">{fmtDate(inv.issued_at)}</td>
-                    <td className="px-2 py-2">
-                      {inv.status !== "PAID" &&
-                        inv.status !== "PENDING_CONFIRMATION" && (
-                          <button
-                            onClick={() => markPaid(inv.id)}
-                            className="px-2 py-1 border rounded text-sm"
-                          >
-                            Zgłoś płatność
-                          </button>
-                        )}
-                      {inv.status === "PENDING_CONFIRMATION" && (
-                        <span className="text-sm italic text-gray-600">
-                          Oczekuje potwierdzenia
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {invoices.map((inv) => (
+            <div
+              key={inv.id}
+              className="bg-section border border-borderSoft rounded-2xl p-4 space-y-2"
+            >
+              <div className="flex justify-between items-center">
+                <div className="font-medium text-textPrimary">
+                  {inv.external_number || `#${inv.id}`}
+                </div>
+                <div className="text-sm text-textSecondary">
+                  {inv.status === "PENDING_CONFIRMATION"
+                    ? "Pending confirmation"
+                    : inv.status}
+                </div>
+              </div>
 
-          <div className="flex items-center justify-between mt-3">
-            <div className="text-sm text-gray-600">
-              Pokazano: {Math.min((page - 1) * limit + 1, invoices.length)} -{" "}
-              {Math.min(page * limit, invoices.length)}
-            </div>
-            <div className="flex gap-2">
+              <div className="text-sm text-textPrimary">
+                Amount:{" "}
+                <strong>
+                  {Number(inv.amount).toFixed(2)} {inv.currency || "PLN"}
+                </strong>
+              </div>
+
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 border rounded disabled:opacity-50"
+                onClick={() => setSelectedInvoice(inv)}
+                className="ui-btn-outline text-sm"
               >
-                Poprzednia
-              </button>
-              <button
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1 border rounded"
-              >
-                Następna
+                Details
               </button>
             </div>
-          </div>
-        </>
+          ))}
+        </div>
+      )}
+
+      {selectedInvoice && (
+        <InvoiceDetailsModal
+          invoice={selectedInvoice}
+          isClient
+          onClose={() => setSelectedInvoice(null)}
+          onReportPayment={() => setShowReportPayment(true)}
+        />
+      )}
+
+      {showReportPayment && (
+        <ReportPaymentModal
+          onClose={() => setShowReportPayment(false)}
+          onSubmit={submitPayment}
+        />
       )}
     </div>
   );

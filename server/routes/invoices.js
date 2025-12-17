@@ -5,14 +5,12 @@ import { auth, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// simple generator
 function generateInvoiceNumber() {
   const y = new Date().getFullYear();
   return `FV/${y}/${Math.floor(Math.random() * 9000 + 1000)}`;
 }
 
 /**
- * ADMIN – lista faktur
  * GET /api/admin/invoices
  */
 router.get("/", auth, requireRole("ADMIN"), async (req, res) => {
@@ -75,7 +73,6 @@ router.get("/", auth, requireRole("ADMIN"), async (req, res) => {
 });
 
 /**
- * ADMIN – utworzenie faktury
  * POST /api/admin/invoices
  */
 router.post("/", auth, requireRole("ADMIN"), async (req, res) => {
@@ -118,14 +115,12 @@ router.post("/", auth, requireRole("ADMIN"), async (req, res) => {
 });
 
 /**
- * KLIENT – lista własnych faktur
- * GET /api/invoices/client  (you can leave this mounted at /api/invoices if you prefer)
+ * GET /api/invoices/client
  */
 router.get("/client", auth, async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      // Auth middleware didn't attach user — respond 401 instead of throwing
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -133,16 +128,14 @@ router.get("/client", auth, async (req, res) => {
     const { rows } = await pool.query(q, [userId]);
     return res.json({ invoices: rows });
   } catch (err) {
-    // log full stack for debugging
     console.error("GET /api/invoices/client error:", err?.stack || err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 /**
- * KLIENT lub ADMIN — szczegóły faktury
- * GET /api/invoices/:id  (if router mounted at /api/invoices)
- * OR GET /api/admin/invoices/:id when mounted at /api/admin/invoices
+ * GET /api/invoices/:id
+ * OR GET /api/admin/invoices/:id
  */
 router.get("/:id", auth, async (req, res) => {
   try {
@@ -166,8 +159,7 @@ router.get("/:id", auth, async (req, res) => {
 });
 
 /**
- * Klient lub admin — oznaczenie jako opłacone
- * POST /api/invoices/:id/pay  (or /api/admin/invoices/:id/pay if mounted there)
+ * POST /api/invoices/:id/pay
  */
 router.post("/:id/pay", auth, async (req, res) => {
   try {

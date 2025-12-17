@@ -1,49 +1,66 @@
-// components/Navbar.jsx
-// React + Tailwind navbar with Login/Register buttons that open modal dialogs
-// - register only creates CLIENT (frontend doesn't send role)
-// - login/register redirect based on role: /client, /technician, /admin
-// - expects VITE_API_URL env (fallback to http://localhost:5050)
-
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useNotify } from "../notifications/NotificationContext";
 
 export default function Navbar() {
   const API = import.meta.env.VITE_API_URL || "http://localhost:5050";
   const navigate = useNavigate();
+  const notify = useNotify();
 
-  const [showModal, setShowModal] = useState(null); // null | 'login' | 'register'
+  const [showModal, setShowModal] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // auth state (kept in sync with localStorage)
   const [user, setUser] = useState(null);
 
-  // form state
+  const [theme, setTheme] = useState("light");
+
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [regForm, setRegForm] = useState({ name: "", email: "", password: "" });
 
+  const navBtn =
+    "px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-sm disabled:opacity-60";
+
+  /* ===================== THEME ===================== */
   useEffect(() => {
-    // read user from localStorage on mount
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
+      setTheme("dark");
+    }
+  }, []);
+
+  function toggleTheme() {
+    if (theme === "light") {
+      document.documentElement.setAttribute("data-theme", "dark");
+      localStorage.setItem("theme", "dark");
+      setTheme("dark");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+      localStorage.setItem("theme", "light");
+      setTheme("light");
+    }
+  }
+
+  /* ===================== AUTH ===================== */
+  useEffect(() => {
     try {
       const raw = localStorage.getItem("user");
       if (raw) setUser(JSON.parse(raw));
-    } catch (e) {
+    } catch {
       setUser(null);
     }
   }, []);
 
   function open(type) {
-    setError("");
     setShowModal(type);
     document.documentElement.style.overflow = "hidden";
   }
+
   function close() {
     setShowModal(null);
     document.documentElement.style.overflow = "";
   }
 
   function redirectByRole(role) {
-    if (!role) return navigate("/");
     if (role === "TECHNICIAN") navigate("/technician");
     else if (role === "CLIENT") navigate("/client");
     else if (role === "ADMIN") navigate("/admin");
@@ -52,8 +69,8 @@ export default function Navbar() {
 
   async function handleLogin(e) {
     e.preventDefault();
-    setError("");
     setLoading(true);
+
     try {
       const res = await fetch(`${API}/api/auth/login`, {
         method: "POST",
@@ -61,25 +78,18 @@ export default function Navbar() {
         body: JSON.stringify(loginForm),
       });
 
-      // attempt to parse json (graceful)
       const data = await res.json().catch(() => ({}));
-      if (!res.ok)
-        throw new Error(data.error || `Login failed (${res.status})`);
+      if (!res.ok) throw new Error(data.error || "Login failed");
 
-      // save token and user
-      if (data.token) localStorage.setItem("token", data.token);
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        setUser(data.user);
-      }
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      setUser(data.user);
 
+      notify.success("Logged in successfully");
       close();
-
-      // redirect based on role from response
-      const role = data?.user?.role;
-      redirectByRole(role);
+      redirectByRole(data.user?.role);
     } catch (err) {
-      setError(err.message || "Login failed");
+      notify.error(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -87,33 +97,27 @@ export default function Navbar() {
 
   async function handleRegister(e) {
     e.preventDefault();
-    setError("");
     setLoading(true);
+
     try {
       const res = await fetch(`${API}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // IMPORTANT: we only send name/email/password (role is enforced server-side)
         body: JSON.stringify(regForm),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok)
-        throw new Error(data.error || `Register failed (${res.status})`);
+      if (!res.ok) throw new Error(data.error || "Registration failed");
 
-      if (data.token) localStorage.setItem("token", data.token);
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        setUser(data.user);
-      }
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      setUser(data.user);
 
+      notify.success("Account created successfully");
       close();
-
-      // after registration user is a CLIENT (server enforces), redirect to client panel
-      const role = data?.user?.role || "CLIENT";
-      redirectByRole(role);
+      redirectByRole(data.user?.role || "CLIENT");
     } catch (err) {
-      setError(err.message || "Register failed");
+      notify.error(err.message || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -123,80 +127,84 @@ export default function Navbar() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
-    // optional: clear other stored data if needed
+    notify.success("Logged out");
     navigate("/");
   }
 
   return (
     <>
-      <nav className="w-full bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      {/* NAVBAR */}
+      <nav className="w-full h-16 bg-navbar border-b border-borderSoft">
+        <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
+          {/* LOGO */}
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 bg-indigo-600 rounded flex items-center justify-center text-white font-bold">
-              H
-            </div>
-            <span className="font-semibold">HVACapp</span>
+            <span className="font-semibold text-textPrimary text-lg">
+              HVACapp
+            </span>
           </div>
 
-          {/* --- Right side: show login/register when no user, otherwise navbarLogged --- */}
+          {/* ACTIONS */}
           <div className="flex items-center gap-3">
+            {/* 🌙 THEME TOGGLE */}
+            <button
+              onClick={toggleTheme}
+              className={`${navBtn} border border-borderMedium text-textPrimary`}
+              title="Toggle dark / light mode"
+            >
+              {theme === "light" ? "🌙" : "☀️"}
+            </button>
+
             {!user ? (
               <>
                 <button
                   onClick={() => open("login")}
-                  className="px-4 py-2 rounded-md border border-gray-200 hover:shadow-sm"
+                  className={`${navBtn} border border-borderMedium text-primary hover:bg-accent/30`}
                 >
-                  Zaloguj
+                  Login
                 </button>
                 <button
                   onClick={() => open("register")}
-                  className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                  className={`${navBtn} bg-primary text-white hover:bg-primary-hover`}
                 >
-                  Rejestracja
+                  Register
                 </button>
               </>
             ) : (
-              // navbarLogged
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={logout}
-                  className="px-3 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 text-sm"
-                >
-                  Wyloguj
-                </button>
-              </div>
+              <button
+                onClick={logout}
+                className={`${navBtn} bg-primary text-white hover:bg-primary-hover`}
+              >
+                Logout
+              </button>
             )}
           </div>
         </div>
       </nav>
 
-      {/* Modal overlay + dialogs */}
+      {/* MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* blurred background */}
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-overlay backdrop-blur-sm"
             onClick={close}
-            aria-hidden
           />
 
           <div className="relative w-full max-w-md mx-4">
-            <div className="bg-white rounded-2xl shadow-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">
-                  {showModal === "login" ? "Logowanie" : "Rejestracja"}
+            <div className="bg-modal rounded-2xl shadow-xl p-6 border border-borderSoft">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-semibold text-textPrimary">
+                  {showModal === "login" ? "Login" : "Register"}
                 </h3>
-                <button onClick={close} className="text-gray-500">
+                <button
+                  onClick={close}
+                  className="text-textSecondary hover:text-textPrimary"
+                >
                   ✕
                 </button>
               </div>
 
-              {error && (
-                <div className="text-sm text-red-600 mb-3">{error}</div>
-              )}
-
               {showModal === "login" ? (
-                <form onSubmit={handleLogin} className="space-y-3">
+                <form onSubmit={handleLogin} className="space-y-4">
                   <input
                     required
                     type="email"
@@ -205,38 +213,41 @@ export default function Navbar() {
                     onChange={(e) =>
                       setLoginForm({ ...loginForm, email: e.target.value })
                     }
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="ui-input w-full"
                   />
                   <input
                     required
                     type="password"
-                    placeholder="Hasło"
+                    placeholder="Password"
                     value={loginForm.password}
                     onChange={(e) =>
-                      setLoginForm({ ...loginForm, password: e.target.value })
+                      setLoginForm({
+                        ...loginForm,
+                        password: e.target.value,
+                      })
                     }
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="ui-input w-full"
                   />
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-2 rounded-md bg-indigo-600 text-white disabled:opacity-60"
+                    className="w-full ui-btn-primary"
                   >
-                    {loading ? "Trwa..." : "Zaloguj"}
+                    {loading ? "Processing..." : "Login"}
                   </button>
                 </form>
               ) : (
-                <form onSubmit={handleRegister} className="space-y-3">
+                <form onSubmit={handleRegister} className="space-y-4">
                   <input
                     required
                     type="text"
-                    placeholder="Imię"
+                    placeholder="Name"
                     value={regForm.name}
                     onChange={(e) =>
                       setRegForm({ ...regForm, name: e.target.value })
                     }
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="ui-input w-full"
                   />
                   <input
                     required
@@ -246,27 +257,28 @@ export default function Navbar() {
                     onChange={(e) =>
                       setRegForm({ ...regForm, email: e.target.value })
                     }
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="ui-input w-full"
                   />
                   <input
                     required
                     type="password"
-                    placeholder="Hasło"
+                    placeholder="Password"
                     value={regForm.password}
                     onChange={(e) =>
-                      setRegForm({ ...regForm, password: e.target.value })
+                      setRegForm({
+                        ...regForm,
+                        password: e.target.value,
+                      })
                     }
-                    className="w-full px-3 py-2 border rounded-md"
+                    className="ui-input w-full"
                   />
-
-                  {/* NOTE: role radios removed — server will enforce CLIENT role on register */}
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-2 rounded-md bg-indigo-600 text-white disabled:opacity-60"
+                    className="w-full ui-btn-primary"
                   >
-                    {loading ? "Trwa..." : "Zarejestruj się"}
+                    {loading ? "Processing..." : "Register"}
                   </button>
                 </form>
               )}

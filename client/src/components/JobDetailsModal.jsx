@@ -1,5 +1,5 @@
-// src/components/JobDetailsModal.jsx
 import React, { useEffect, useState } from "react";
+import { useNotify } from "../notifications/NotificationContext";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5050";
 const STATUS_OPTIONS = [
@@ -12,24 +12,23 @@ const STATUS_OPTIONS = [
 ];
 
 export default function JobDetailsModal({ jobId, onClose, onUpdated }) {
+  const notify = useNotify();
   const token = localStorage.getItem("token");
+
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [techList, setTechList] = useState([]);
   const [selectedTech, setSelectedTech] = useState("");
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!token || !jobId) return;
     fetchJob();
     fetchTechnicians();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId]);
+  }, [token, jobId]);
 
   async function fetchJob() {
     setLoading(true);
-    setMessage("");
     try {
       const res = await fetch(`${API_BASE}/api/admin/jobs/${jobId}`, {
         headers: { Authorization: token ? `Bearer ${token}` : "" },
@@ -39,8 +38,7 @@ export default function JobDetailsModal({ jobId, onClose, onUpdated }) {
       setJob(data);
       setSelectedTech(data.technician_id || "");
     } catch (err) {
-      console.error(err);
-      setMessage(err.message || "Błąd pobierania szczegółów");
+      notify.error(err.message || "Error loading job details");
     } finally {
       setLoading(false);
     }
@@ -62,7 +60,6 @@ export default function JobDetailsModal({ jobId, onClose, onUpdated }) {
   async function handleUpdateStatus(newStatus) {
     if (!job) return;
     setSaving(true);
-    setMessage("");
     try {
       const res = await fetch(`${API_BASE}/api/admin/jobs/${job.id}`, {
         method: "PUT",
@@ -74,13 +71,13 @@ export default function JobDetailsModal({ jobId, onClose, onUpdated }) {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Update failed");
+        throw new Error(err.error || "Failed to update job status");
       }
       await fetchJob();
+      notify.success("Job status has been updated");
       onUpdated?.();
     } catch (err) {
-      console.error(err);
-      setMessage(err.message || "Błąd aktualizacji statusu");
+      notify.error(err.message || "Error updating job status");
     } finally {
       setSaving(false);
     }
@@ -88,11 +85,10 @@ export default function JobDetailsModal({ jobId, onClose, onUpdated }) {
 
   async function handleAssign() {
     if (!selectedTech) {
-      setMessage("Wybierz technika");
+      notify.error("Please select a technician");
       return;
     }
     setSaving(true);
-    setMessage("");
     try {
       const res = await fetch(`${API_BASE}/api/admin/jobs/${job.id}/assign`, {
         method: "POST",
@@ -104,13 +100,13 @@ export default function JobDetailsModal({ jobId, onClose, onUpdated }) {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Assign failed");
+        throw new Error(err.error || "Failed to assign technician");
       }
       await fetchJob();
+      notify.success("Technician has been assigned to the job");
       onUpdated?.();
     } catch (err) {
-      console.error(err);
-      setMessage(err.message || "Błąd przypisania technika");
+      notify.error(err.message || "Error assigning technician");
     } finally {
       setSaving(false);
     }
@@ -119,155 +115,165 @@ export default function JobDetailsModal({ jobId, onClose, onUpdated }) {
   if (!jobId) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose}></div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      {/* OVERLAY */}
+      <div
+        className="absolute inset-0 bg-overlay backdrop-blur-sm"
+        onClick={onClose}
+      />
 
-      <div className="relative bg-white rounded shadow-lg w-full max-w-2xl p-6 z-10">
-        <div className="flex items-start justify-between mb-4">
-          <h3 className="text-xl font-semibold">
-            Szczegóły zlecenia {job?.external_number ?? `#${jobId}`}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            Zamknij ✕
-          </button>
-        </div>
+      {/* MODAL */}
+      <div className="relative w-full max-w-2xl">
+        <div className="bg-modal rounded-2xl border border-borderSoft shadow-xl p-6">
+          {/* HEADER */}
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <h3 className="text-lg font-semibold text-textPrimary">
+              Job details {job?.external_number ?? `#${jobId}`}
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-textSecondary hover:text-textPrimary transition"
+            >
+              ✕
+            </button>
+          </div>
 
-        {loading ? (
-          <div>Ładowanie...</div>
-        ) : message ? (
-          <div className="text-sm text-red-600 mb-3">{message}</div>
-        ) : job ? (
-          <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs text-gray-500">Tytuł</div>
-                <div className="font-medium">{job.title || "—"}</div>
+          {loading ? (
+            <div className="text-sm text-textSecondary">Loading…</div>
+          ) : job ? (
+            <div className="space-y-6 text-sm">
+              {/* BASIC INFO */}
+              <div className="grid grid-cols-2 gap-4">
+                <Info label="Title">{job.title || "—"}</Info>
+                <Info label="Job number">
+                  {job.external_number || `#${job.id}`}
+                </Info>
+
+                <Info label="Client">
+                  {job.client_name || job.client_email || "—"}
+                  {job.client_email && (
+                    <div className="text-xs text-textSecondary">
+                      {job.client_email}
+                    </div>
+                  )}
+                </Info>
+
+                <Info label="Technician">
+                  {job.tech_name || "—"}
+                  {job.tech_email && (
+                    <div className="text-xs text-textSecondary">
+                      {job.tech_email}
+                    </div>
+                  )}
+                </Info>
               </div>
 
-              <div>
-                <div className="text-xs text-gray-500">Nr zlecenia</div>
-                <div>{job.external_number || `#${job.id}`}</div>
-              </div>
-
-              <div>
-                <div className="text-xs text-gray-500">Klient</div>
-                <div>{job.client_name || job.client_email || "—"}</div>
-                {job.client_email && (
-                  <div className="text-xs text-gray-500">
-                    {job.client_email}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <div className="text-xs text-gray-500">Technik</div>
-                <div>{job.tech_name || "—"}</div>
-                {job.tech_email && (
-                  <div className="text-xs text-gray-500">{job.tech_email}</div>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500">Opis</div>
-              <div className="whitespace-pre-wrap">
-                {job.description || "—"}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <div className="text-xs text-gray-500">Status</div>
-                <div className="flex items-center gap-2">
-                  <div className="font-medium">{job.status}</div>
-                  <select
-                    value={job.status}
-                    onChange={(e) => handleUpdateStatus(e.target.value)}
-                    disabled={saving}
-                    className="px-2 py-1 border rounded text-sm"
-                  >
-                    {STATUS_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+              {/* DESCRIPTION */}
+              <section>
+                <div className="text-xs text-textSecondary mb-1">
+                  Description
                 </div>
-              </div>
+                <div className="rounded-xl border border-borderSoft bg-section p-3 whitespace-pre-wrap text-textPrimary">
+                  {job.description || "—"}
+                </div>
+              </section>
 
-              <div>
-                <div className="text-xs text-gray-500">Data</div>
-                <div>
+              {/* STATUS + DATE */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Info label="Status">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{job.status}</span>
+                    <select
+                      value={job.status}
+                      onChange={(e) => handleUpdateStatus(e.target.value)}
+                      disabled={saving}
+                      className="ui-input text-sm min-w-[160px]"
+                    >
+                      {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </Info>
+
+                <Info label="Date">
                   {job.scheduled_date
                     ? new Date(job.scheduled_date).toLocaleDateString()
                     : job.created_at
                     ? new Date(job.created_at).toLocaleString()
                     : "—"}
+                </Info>
+              </div>
+
+              {/* ASSIGN */}
+              <section>
+                <div className="text-xs text-textSecondary mb-2">
+                  Assign technician
                 </div>
-              </div>
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={selectedTech}
+                    onChange={(e) => setSelectedTech(e.target.value)}
+                    className="ui-input flex-1"
+                  >
+                    <option value="">— select technician —</option>
+                    {techList.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.email})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAssign}
+                    disabled={saving}
+                    className="ui-btn-primary"
+                  >
+                    Assign
+                  </button>
+                </div>
+              </section>
 
-              <div>
-                <div className="text-xs text-gray-500">Priorytet</div>
-                <div>{job.priority ?? "—"}</div>
-              </div>
-            </div>
+              {/* ADDRESS */}
+              {job.address && <Info label="Address">{job.address}</Info>}
 
-            <div>
-              <div className="text-xs text-gray-500 mb-2">
-                Przypisz technika
-              </div>
-              <div className="flex gap-2 items-center">
-                <select
-                  value={selectedTech}
-                  onChange={(e) => setSelectedTech(e.target.value)}
-                  className="flex-1 px-3 py-2 border rounded"
-                >
-                  <option value="">-- wybierz technika --</option>
-                  {techList.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.email})
-                    </option>
-                  ))}
-                </select>
+              {/* ACTIONS */}
+              <div className="flex justify-end gap-3 pt-4">
                 <button
-                  onClick={handleAssign}
-                  className="px-3 py-2 bg-indigo-600 text-white rounded"
-                  disabled={saving}
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-lg text-sm font-medium
+                             border border-borderMedium
+                             text-primary hover:bg-accent/30 transition"
                 >
-                  Przypisz
+                  Close
+                </button>
+
+                <button
+                  onClick={() => handleUpdateStatus("DONE")}
+                  disabled={saving}
+                  className="ui-btn-primary"
+                >
+                  Mark as completed
                 </button>
               </div>
             </div>
-
-            {job.address && (
-              <div>
-                <div className="text-xs text-gray-500">Adres</div>
-                <div>{job.address}</div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2">
-              <button onClick={onClose} className="px-3 py-2 border rounded">
-                Zamknij
-              </button>
-              <button
-                onClick={async () => {
-                  await handleUpdateStatus("DONE");
-                }}
-                className="px-3 py-2 bg-green-600 text-white rounded"
-                disabled={saving}
-              >
-                Oznacz jako zakończone
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div>Brak danych</div>
-        )}
+          ) : (
+            <div className="text-sm text-textSecondary">No data available</div>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+/* ================= HELPERS ================= */
+
+function Info({ label, children }) {
+  return (
+    <div>
+      <div className="text-xs text-textSecondary">{label}</div>
+      <div className="text-sm font-medium text-textPrimary">{children}</div>
     </div>
   );
 }

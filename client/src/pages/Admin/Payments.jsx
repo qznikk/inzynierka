@@ -1,74 +1,113 @@
-// src/pages/Admin/AdminInvoices.jsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useNotify } from "../../notifications/NotificationContext";
+import InvoiceDetailsModal from "../../components/InvoiceDetailsModal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
+/* ===================== PDF HELPER ===================== */
+async function openInvoicePdf(invoiceId) {
+  try {
+    const token = localStorage.getItem("token");
+
+    const res = await fetch(`${API_BASE}/api/invoices/${invoiceId}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) throw new Error();
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  } catch {
+    alert("Failed to download PDF");
+  }
+}
+
 export default function AdminPayments() {
   const token = localStorage.getItem("token") || "";
+  const notify = useNotify();
+
   const [invoices, setInvoices] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const [showCreate, setShowCreate] = useState(false);
-  const [editInvoice, setEditInvoice] = useState(null); // invoice being edited
+  const [editInvoice, setEditInvoice] = useState(null);
+  const [detailsInvoice, setDetailsInvoice] = useState(null);
+
   const [form, setForm] = useState({
     client_id: "",
     amount: "",
     description: "",
     due_date: "",
   });
-  const [message, setMessage] = useState("");
 
   const headers = {
-    Authorization: token ? `Bearer ${token}` : "",
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 
+  /* ===================== DATA ===================== */
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
-    setMessage("");
     try {
       const res = await fetch(`${API_BASE}/api/admin/invoices`, { headers });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.error("Invoices fetch error:", res.status, text);
-        setMessage(`Błąd pobierania faktur: ${res.status}`);
-        setInvoices([]);
-        setLoading(false);
-        return;
-      }
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setInvoices(data.invoices || data || []);
-    } catch (err) {
-      console.error(err);
-      setMessage("Błąd pobierania faktur");
+    } catch {
+      notify.error("Error loading invoices");
+      setInvoices([]);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [notify, token]);
 
   const fetchClients = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/admin/clients?limit=200`, {
         headers,
       });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.error("Clients fetch error:", res.status, text);
-        setMessage(`Błąd pobierania klientów: ${res.status}`);
-        return;
-      }
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setClients(data.clients || data || []);
-    } catch (err) {
-      console.error(err);
-      setMessage("Błąd pobierania klientów");
+    } catch {
+      notify.error("Error loading clients");
     }
-  }, [token]);
+  }, [notify, token]);
 
   useEffect(() => {
+    if (!token) return;
     fetchInvoices();
     fetchClients();
-  }, [fetchInvoices, fetchClients]);
+  }, [token, fetchInvoices, fetchClients]);
+
+  /* ===================== DERIVED ===================== */
+  const pendingConfirm = useMemo(
+    () => invoices.filter((i) => i.status === "PENDING_CONFIRMATION"),
+    [invoices]
+  );
+
+  const otherInvoices = useMemo(
+    () => invoices.filter((i) => i.status !== "PENDING_CONFIRMATION"),
+    [invoices]
+  );
+
+  /* ===================== ACTIONS ===================== */
+  async function confirmPayment(inv) {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/admin/invoices/${inv.id}/confirm-pay`,
+        { method: "POST", headers }
+      );
+      if (!res.ok) throw new Error();
+      notify.success("Payment confirmed");
+      setDetailsInvoice(null);
+      fetchInvoices();
+    } catch {
+      notify.error("Error confirming payment");
+    }
+  }
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -78,41 +117,36 @@ export default function AdminPayments() {
         headers,
         body: JSON.stringify(form),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => {});
-        throw new Error(err?.error || "Błąd");
-      }
-      await fetchInvoices();
+      if (!res.ok) throw new Error();
+      notify.success("Invoice created");
       setShowCreate(false);
       setForm({ client_id: "", amount: "", description: "", due_date: "" });
-    } catch (err) {
-      setMessage(err.message || "Błąd tworzenia");
+      fetchInvoices();
+    } catch {
+      notify.error("Error creating invoice");
     }
   }
 
   async function handleDelete(id) {
-    if (!confirm("Usuń?")) return;
+    if (!window.confirm("Delete this invoice?")) return;
     try {
       const res = await fetch(`${API_BASE}/api/admin/invoices/${id}`, {
         method: "DELETE",
         headers,
       });
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`Błąd: ${res.status} ${text}`);
-      }
-      await fetchInvoices();
-    } catch (err) {
-      console.error(err);
-      setMessage("Błąd usuwania faktury");
+      if (!res.ok) throw new Error();
+      notify.success("Invoice deleted");
+      fetchInvoices();
+    } catch {
+      notify.error("Error deleting invoice");
     }
   }
 
   function openEdit(inv) {
     setEditInvoice(inv);
     setForm({
-      client_id: inv.client_id || "",
-      amount: inv.amount || "",
+      client_id: inv.client_id,
+      amount: inv.amount,
       description: inv.description || "",
       due_date: inv.due_date
         ? new Date(inv.due_date).toISOString().slice(0, 10)
@@ -122,7 +156,6 @@ export default function AdminPayments() {
 
   async function handleEditSubmit(e) {
     e.preventDefault();
-    if (!editInvoice) return;
     try {
       const res = await fetch(
         `${API_BASE}/api/admin/invoices/${editInvoice.id}`,
@@ -132,110 +165,122 @@ export default function AdminPayments() {
           body: JSON.stringify(form),
         }
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => {});
-        throw new Error(err?.error || "Błąd");
-      }
-      await fetchInvoices();
+      if (!res.ok) throw new Error();
+      notify.success("Invoice updated");
       setEditInvoice(null);
-      setForm({ client_id: "", amount: "", description: "", due_date: "" });
-    } catch (err) {
-      console.error(err);
-      setMessage("Błąd edycji");
+      fetchInvoices();
+    } catch {
+      notify.error("Error editing invoice");
     }
   }
 
-  async function confirmPayment(inv) {
-    if (!confirm("Potwierdzić otrzymanie płatności i oznaczyć jako ZAPŁACONE?"))
-      return;
-    try {
-      const res = await fetch(
-        `${API_BASE}/api/admin/invoices/${inv.id}/confirm-pay`,
-        {
-          method: "POST",
-          headers,
-        }
-      );
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`Błąd: ${res.status} ${text}`);
-      }
-      const updated = await res.json();
-      setInvoices((prev) =>
-        prev.map((i) => (i.id === updated.id ? updated : i))
-      );
-    } catch (err) {
-      console.error(err);
-      setMessage("Błąd potwierdzenia płatności");
-    }
-  }
-
+  /* ===================== RENDER ===================== */
   return (
-    <div className="space-y-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Płatności / Faktury</h1>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="px-3 py-2 bg-emerald-600 text-white rounded"
-        >
-          Dodaj nową fakturę
+    <div className="text-textPrimary bg-section p-6 space-y-6">
+      <header className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold text-textPrimary">
+          Payments / Invoices
+        </h1>
+        <button onClick={() => setShowCreate(true)} className="ui-btn-primary">
+          Issue invoice
         </button>
       </header>
 
-      {message && <div className="text-red-600">{message}</div>}
+      {/* ===================== PENDING ===================== */}
+      {pendingConfirm.length > 0 && (
+        <div
+          className="rounded-2xl border border-borderSoft p-4"
+          style={{
+            background:
+              "color-mix(in srgb, var(--status-waiting) 15%, transparent)",
+          }}
+        >
+          <h2 className="font-semibold mb-3 text-textPrimary">
+            🕓 Payments pending confirmation ({pendingConfirm.length})
+          </h2>
 
-      <div className="bg-white p-4 rounded shadow">
+          <div className="space-y-2">
+            {pendingConfirm.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex justify-between items-center bg-section p-3 rounded-xl border border-borderSoft"
+              >
+                <div>
+                  <div className="font-medium text-textPrimary">
+                    {inv.external_number} — {inv.client_name}
+                  </div>
+                  <div className="text-sm text-textSecondary">
+                    {Number(inv.amount).toFixed(2)} {inv.currency}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openInvoicePdf(inv.id)}
+                    className="ui-btn-outline text-sm"
+                  >
+                    PDF
+                  </button>
+                  <button
+                    onClick={() => setDetailsInvoice(inv)}
+                    className="ui-btn-primary text-sm"
+                  >
+                    Details / Confirm
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ===================== ALL ===================== */}
+      <div className="bg-section rounded-2xl border border-borderSoft p-4">
         {loading ? (
-          <div>Ładuję...</div>
+          <div className="text-textSecondary">Loading…</div>
         ) : (
           <table className="min-w-full text-sm">
-            <thead className="text-left text-gray-600">
+            <thead className="text-textSecondary">
               <tr>
-                <th>Nr</th>
-                <th>Klient</th>
-                <th>Kwota</th>
-                <th>Status</th>
-                <th>Data</th>
-                <th>Akcje</th>
+                <th className="text-left py-2">No.</th>
+                <th className="text-left py-2">Client</th>
+                <th className="text-left py-2">Amount</th>
+                <th className="text-left py-2">Status</th>
+                <th className="text-left py-2">Date</th>
+                <th className="text-left py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {invoices.map((inv) => (
-                <tr key={inv.id} className="border-t">
-                  <td className="px-2 py-2">{inv.external_number}</td>
-                  <td className="px-2 py-2">
-                    {inv.client_name || inv.client_email}
-                  </td>
-                  <td className="px-2 py-2">
+              {otherInvoices.map((inv) => (
+                <tr key={inv.id} className="border-t border-borderSoft">
+                  <td>{inv.external_number}</td>
+                  <td>{inv.client_name || inv.client_email}</td>
+                  <td>
                     {Number(inv.amount).toFixed(2)} {inv.currency}
                   </td>
-                  <td className="px-2 py-2">
-                    {inv.status === "PENDING_CONFIRMATION"
-                      ? "Oczekuje potwierdzenia"
-                      : inv.status}
-                  </td>
-                  <td className="px-2 py-2">
-                    {new Date(inv.issued_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-2 py-2">
+                  <td>{inv.status}</td>
+                  <td>{new Date(inv.issued_at).toLocaleDateString()}</td>
+                  <td className="space-x-2">
                     <button
-                      className="mr-2 text-sm px-2 py-1 border rounded"
+                      onClick={() => openInvoicePdf(inv.id)}
+                      className="ui-btn-outline text-xs"
+                    >
+                      PDF
+                    </button>
+                    <button
                       onClick={() => openEdit(inv)}
+                      className="ui-btn-outline text-xs"
                     >
-                      Edytuj
+                      Edit
                     </button>
                     <button
-                      className="mr-2 text-sm px-2 py-1 border rounded text-emerald-700"
-                      onClick={() => confirmPayment(inv)}
-                      disabled={inv.status === "PAID"}
-                    >
-                      Potwierdź płatność
-                    </button>
-                    <button
-                      className="text-sm px-2 py-1 border rounded text-red-600"
                       onClick={() => handleDelete(inv.id)}
+                      className="text-xs px-2 py-1 rounded border"
+                      style={{
+                        color: "var(--status-danger)",
+                        borderColor: "var(--status-danger)",
+                      }}
                     >
-                      Usuń
+                      Delete
                     </button>
                   </td>
                 </tr>
@@ -245,147 +290,93 @@ export default function AdminPayments() {
         )}
       </div>
 
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setShowCreate(false)}
-          />
-          <form
-            onSubmit={handleCreate}
-            className="relative bg-white rounded shadow-lg p-4 w-full max-w-xl"
-          >
-            <h3 className="text-lg font-semibold mb-2">Nowa faktura</h3>
-            <div className="grid grid-cols-1 gap-3">
-              <select
-                required
-                value={form.client_id}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, client_id: e.target.value }))
-                }
-                className="px-3 py-2 border rounded"
-              >
-                <option value="">-- wybierz klienta --</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || c.email} ({c.email})
-                  </option>
-                ))}
-              </select>
-              <input
-                required
-                value={form.amount}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, amount: e.target.value }))
-                }
-                placeholder="Kwota"
-                className="px-3 py-2 border rounded"
-              />
-              <input
-                value={form.due_date}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, due_date: e.target.value }))
-                }
-                type="date"
-                className="px-3 py-2 border rounded"
-              />
-              <textarea
-                value={form.description}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, description: e.target.value }))
-                }
-                className="px-3 py-2 border rounded"
-                placeholder="Opis"
-              />
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <button
-                type="button"
-                onClick={() => setShowCreate(false)}
-                className="px-3 py-2 border rounded"
-              >
-                Anuluj
-              </button>
-              <button
-                type="submit"
-                className="px-3 py-2 bg-emerald-600 text-white rounded"
-              >
-                Utwórz
-              </button>
-            </div>
-          </form>
-        </div>
+      {/* ===================== DETAILS MODAL ===================== */}
+      {detailsInvoice && (
+        <InvoiceDetailsModal
+          invoice={detailsInvoice}
+          onClose={() => setDetailsInvoice(null)}
+          onConfirm={() => confirmPayment(detailsInvoice)}
+          isAdmin
+        />
       )}
 
-      {editInvoice && (
+      {/* ===================== CREATE / EDIT MODAL ===================== */}
+      {(showCreate || editInvoice) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setEditInvoice(null)}
+            className="absolute inset-0 bg-overlay"
+            onClick={() => {
+              setShowCreate(false);
+              setEditInvoice(null);
+            }}
           />
           <form
-            onSubmit={handleEditSubmit}
-            className="relative bg-white rounded shadow-lg p-4 w-full max-w-xl"
+            onSubmit={editInvoice ? handleEditSubmit : handleCreate}
+            className="relative bg-modal rounded-2xl border border-borderSoft p-6 w-full max-w-xl"
           >
-            <h3 className="text-lg font-semibold mb-2">
-              Edytuj fakturę{" "}
-              {editInvoice.external_number || `#${editInvoice.id}`}
+            <h3 className="text-lg font-semibold mb-4 text-textPrimary">
+              {editInvoice ? "Edit invoice" : "New invoice"}
             </h3>
-            <div className="grid grid-cols-1 gap-3">
+
+            <div className="grid gap-3">
               <select
                 required
                 value={form.client_id}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, client_id: e.target.value }))
                 }
-                className="px-3 py-2 border rounded"
+                className="ui-input"
               >
-                <option value="">-- wybierz klienta --</option>
+                <option value="">-- select client --</option>
                 {clients.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name || c.email} ({c.email})
+                    {c.name || c.email}
                   </option>
                 ))}
               </select>
+
               <input
                 required
                 value={form.amount}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, amount: e.target.value }))
                 }
-                placeholder="Kwota"
-                className="px-3 py-2 border rounded"
+                placeholder="Amount"
+                className="ui-input"
               />
+
               <input
+                type="date"
                 value={form.due_date}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, due_date: e.target.value }))
                 }
-                type="date"
-                className="px-3 py-2 border rounded"
+                className="ui-input"
               />
+
               <textarea
                 value={form.description}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, description: e.target.value }))
                 }
-                className="px-3 py-2 border rounded"
-                placeholder="Opis"
+                placeholder="Description"
+                className="ui-input h-24"
               />
             </div>
-            <div className="flex justify-end gap-2 mt-4">
+
+            <div className="flex justify-end gap-2 mt-5">
               <button
                 type="button"
-                onClick={() => setEditInvoice(null)}
-                className="px-3 py-2 border rounded"
+                onClick={() => {
+                  setShowCreate(false);
+                  setEditInvoice(null);
+                }}
+                className="ui-btn-outline"
               >
-                Anuluj
+                Cancel
               </button>
-              <button
-                type="submit"
-                className="px-3 py-2 bg-emerald-600 text-white rounded"
-              >
-                Zapisz
+              <button type="submit" className="ui-btn-primary">
+                Save
               </button>
             </div>
           </form>

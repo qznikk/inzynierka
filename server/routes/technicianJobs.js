@@ -7,7 +7,6 @@ const router = express.Router();
 
 /**
  * GET /api/technician/jobs
- * returns jobs assigned to logged-in technician
  */
 router.get("/", auth, requireRole("TECHNICIAN"), async (req, res) => {
   try {
@@ -40,7 +39,6 @@ router.get("/", auth, requireRole("TECHNICIAN"), async (req, res) => {
 
 /**
  * GET /api/technician/jobs/:id
- * returns job details if it belongs to logged-in technician
  */
 router.get("/:id", auth, requireRole("TECHNICIAN"), async (req, res) => {
   try {
@@ -65,7 +63,6 @@ router.get("/:id", auth, requireRole("TECHNICIAN"), async (req, res) => {
       return res.status(403).json({ error: "Not allowed to view this job" });
     }
 
-    // return wrapped with { job: ... } like your technician modal expects
     res.json({ job: rows[0] });
   } catch (err) {
     console.error("GET /api/technician/jobs/:id error:", err);
@@ -75,7 +72,6 @@ router.get("/:id", auth, requireRole("TECHNICIAN"), async (req, res) => {
 
 /**
  * PUT /api/technician/jobs/:id
- * allow technician to update limited fields (status, maybe completed_at)
  */
 router.put("/:id", auth, requireRole("TECHNICIAN"), async (req, res) => {
   try {

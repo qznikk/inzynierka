@@ -1,10 +1,12 @@
-// src/pages/Client/NewJob.jsx
 import React, { useState } from "react";
+import { HVAC_SERVICES } from "../../constants/hvacServices";
+import { useNotify } from "../../notifications/NotificationContext";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
 export default function ClientOrders() {
   const token = localStorage.getItem("token");
+  const notify = useNotify();
 
   const [form, setForm] = useState({
     title: "",
@@ -15,7 +17,6 @@ export default function ClientOrders() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
 
   const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -24,12 +25,22 @@ export default function ClientOrders() {
     setForm((f) => ({ ...f, [name]: value }));
   }
 
+  /** 🔧 APPLY HVAC PRESET */
+  function applyPreset(preset) {
+    setForm((f) => ({
+      ...f,
+      title: preset.title,
+      description: preset.description,
+    }));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
-    setMessage("");
 
     if (!form.title || !form.description) {
-      setMessage("Wypełnij wymagane pola: tytuł i opis.");
+      notify.error(
+        "Please fill in the required fields: title and description."
+      );
       return;
     }
 
@@ -45,12 +56,12 @@ export default function ClientOrders() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok)
-        throw new Error(data.error || "Nie udało się dodać zlecenia");
+      if (!res.ok) throw new Error(data.error || "Failed to create job");
 
-      setMessage(
-        "Zlecenie utworzone. Numer: " + (data.external_number || data.id || "")
+      notify.success(
+        "Job created. Number: " + (data.external_number || data.id || "")
       );
+
       setForm({
         title: "",
         description: "",
@@ -60,92 +71,107 @@ export default function ClientOrders() {
       });
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd przy tworzeniu zlecenia");
+      notify.error(err.message || "Error while creating job");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="max-w-2xl bg-white p-6 rounded shadow">
-      <h2 className="text-xl font-semibold mb-4">Nowe zlecenie</h2>
+    <div className="max-w-2xl bg-section p-6 rounded-2xl border border-borderSoft">
+      <h2 className="text-xl font-semibold mb-4 text-textPrimary">New job</h2>
 
-      {message && <div className="mb-4 text-sm text-gray-700">{message}</div>}
+      {/* 🔧 SUGGESTED HVAC SERVICES */}
+      <div className="mb-5">
+        <div className="text-sm font-medium mb-2 text-textPrimary">
+          Suggested service type (optional)
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {HVAC_SERVICES.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => applyPreset(s)}
+              className="ui-btn-outline text-sm"
+              style={{
+                background:
+                  "color-mix(in srgb, var(--brand-accent) 20%, transparent)",
+              }}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="text-xs text-textSecondary mt-2">
+          Selecting a preset will fill in the title and description — update the
+          fields marked as <b>EDIT HERE</b>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm mb-1">
-            Tytuł <span className="text-red-500">*</span>
+          <label className="block text-sm mb-1 text-textPrimary">
+            Title <span className="text-red-500">*</span>
           </label>
           <input
             name="title"
             value={form.title}
             onChange={handleChange}
             required
-            className="w-full px-3 py-2 border rounded"
-            placeholder="Krótki tytuł problemu"
+            className="ui-input w-full"
+            placeholder="Short description of the issue"
           />
         </div>
 
         <div>
-          <label className="block text-sm mb-1">
-            Opis <span className="text-red-500">*</span>
+          <label className="block text-sm mb-1 text-textPrimary">
+            Description <span className="text-red-500">*</span>
           </label>
           <textarea
             name="description"
             value={form.description}
             onChange={handleChange}
             required
-            className="w-full px-3 py-2 border rounded h-28"
-            placeholder="Opisz problem i ewentualne szczegóły kontaktowe"
+            className="ui-input w-full h-32 font-mono"
+            placeholder="Describe the problem and any relevant details"
           />
         </div>
 
         <div>
-          <label className="block text-sm mb-1">Adres</label>
+          <label className="block text-sm mb-1 text-textPrimary">Address</label>
           <input
             name="address"
             value={form.address}
             onChange={handleChange}
-            className="w-full px-3 py-2 border rounded"
-            placeholder="Miasto, ul. ...  numer mieszkania/numer lokalu"
+            className="ui-input w-full"
+            placeholder="City, street, apartment number"
           />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm mb-1">Preferowana data</label>
+            <label className="block text-sm mb-1 text-textPrimary">
+              Preferred date
+            </label>
             <input
               name="scheduled_date"
               value={form.scheduled_date}
               onChange={handleChange}
               type="date"
-              className="w-full px-3 py-2 border rounded"
+              className="ui-input w-full"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1">Priorytet</label>
-            <select
-              name="priority"
-              value={form.priority}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border rounded"
-            >
-              <option value={1}>Wysoki</option>
-              <option value={2}>Normalny</option>
-              <option value={3}>Niski</option>
-            </select>
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 pt-2">
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-60"
+            className="ui-btn-primary disabled:opacity-60"
           >
-            {loading ? "Wysyłanie..." : "Wyślij zlecenie"}
+            {loading ? "Submitting..." : "Submit job"}
           </button>
           <button
             type="button"
@@ -158,7 +184,7 @@ export default function ClientOrders() {
                 priority: 2,
               })
             }
-            className="px-4 py-2 border rounded"
+            className="ui-btn-outline"
           >
             Reset
           </button>

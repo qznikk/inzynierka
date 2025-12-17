@@ -5,7 +5,7 @@ import { pool } from "../db.js";
 
 const router = express.Router();
 
-// GET /api/profile  - zwraca profil zalogowanego użytkownika
+// GET /api/profile
 router.get("/profile", auth, async (req, res) => {
   try {
     const q = `
@@ -31,12 +31,11 @@ router.get("/profile", auth, async (req, res) => {
   }
 });
 
-// PUT /api/profile  - aktualizuje profil (bez avataru)
+// PUT /api/profile
 router.put("/profile", auth, async (req, res) => {
   try {
     const { name, address, city, postal_code, country, phone } = req.body;
 
-    // podstawowa walidacja typów (opcjonalna)
     if (
       (name !== undefined && typeof name !== "string") ||
       (address !== undefined && typeof address !== "string")

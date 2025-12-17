@@ -1,26 +1,27 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 
-// Layouty
+// layout
 import LandingLayout from "../layout/LandingLayout";
 import ClientLayout from "../layout/ClientLayout";
 import TechnicianLayout from "../layout/TechnicianLayout";
 import AdminLayout from "../layout/AdminLayout";
 
-// Strony klienta
+// client
 import ClientDashboard from "../pages/Client/Dashboard";
 import Orders from "../pages/Client/Orders";
 import Reports from "../pages/Client/Reports";
 import Payments from "../pages/Client/Payments";
 import ClientProfile from "../pages/Client/Profile";
 
-// Strony technika
+// tech
+import TechnicianDashboard from "../pages/Technician/Dashboard";
 import TechnicianJobs from "../pages/Technician/Jobs";
 import TechnicianJobsHistory from "../pages/Technician/JobsHistory";
 import TechnicianReports from "../pages/Technician/Reports";
 import NewReport from "../pages/Technician/NewReport";
 import TechnicianProfile from "../pages/Technician/Profile";
 
-// Strony admina
+// admin
 import AdminDashboard from "../pages/Admin/Dashboard";
 import AdminJobs from "../pages/Admin/Jobs";
 import AdminClients from "../pages/Admin/Clients";
@@ -31,6 +32,9 @@ import Settings from "../pages/Admin/Settings";
 import AdminProfile from "../pages/Admin/Profile";
 import AdminCalendar from "../pages/Admin/Calendar";
 
+// landing
+import LandingPage from "../pages/Landing";
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -38,11 +42,11 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <div className="p-10 text-2xl">Landing Page</div>,
+        element: <LandingPage />,
       },
     ],
   },
-  // PANEL KLIENTA
+  // client
   {
     path: "/client",
     element: <ClientLayout />,
@@ -55,12 +59,13 @@ const router = createBrowserRouter([
     ],
   },
 
-  // PANEL TECHNIKA
+  // tech
   {
     path: "/technician",
     element: <TechnicianLayout />,
     children: [
-      { index: true, element: <TechnicianJobs /> },
+      { index: true, element: <TechnicianDashboard /> },
+      { index: "dashboard", element: <TechnicianDashboard /> },
       { path: "jobs", element: <TechnicianJobs /> },
       { path: "jobshistory", element: <TechnicianJobsHistory /> },
       { path: "reports", element: <TechnicianReports /> },
@@ -69,7 +74,7 @@ const router = createBrowserRouter([
     ],
   },
 
-  // PANEL ADMINA
+  // admin
   {
     path: "/admin",
     element: <AdminLayout />,

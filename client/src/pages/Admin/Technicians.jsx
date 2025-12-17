@@ -1,6 +1,6 @@
-// src/pages/Admin/Technicians.jsx
 import React, { useEffect, useState } from "react";
 import TechnicianDetails from "../../components/TechnicianDetails";
+import { useNotify } from "../../notifications/NotificationContext";
 
 function randomPassword(length = 12) {
   const chars =
@@ -14,24 +14,24 @@ function randomPassword(length = 12) {
 export default function Technicians() {
   const API = import.meta.env.VITE_API_URL || "http://localhost:5050";
   const token = localStorage.getItem("token");
+  const notify = useNotify();
 
   const [techs, setTechs] = useState([]);
   const [loading, setLoading] = useState(false);
+
   const [form, setForm] = useState({ name: "", email: "" });
   const [genPassword, setGenPassword] = useState("");
-  const [message, setMessage] = useState("");
 
-  // wybrany technik (obiekt) do modal-a
   const [selectedTech, setSelectedTech] = useState(null);
 
   useEffect(() => {
+    if (!token) return;
     fetchTechs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
   async function fetchTechs() {
     setLoading(true);
-    setMessage("");
     try {
       const res = await fetch(`${API}/api/admin/technicians`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -44,24 +44,24 @@ export default function Technicians() {
       setTechs(data.technicians || data || []);
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd pobierania technicianów");
+      notify.error(err.message || "Error loading technicians");
     } finally {
       setLoading(false);
     }
   }
 
   function handleGenerate() {
-    const pw = randomPassword(12);
-    setGenPassword(pw);
+    setGenPassword(randomPassword(12));
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setMessage("");
+
     if (!form.name || !form.email || !genPassword) {
-      setMessage("Uzupełnij pola i wygeneruj hasło.");
+      notify.error("Please fill in all fields and generate a password.");
       return;
     }
+
     try {
       const res = await fetch(`${API}/api/admin/create-technician`, {
         method: "POST",
@@ -75,71 +75,73 @@ export default function Technicians() {
           password: genPassword,
         }),
       });
+
       const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.error || "Nie udało się dodać technika");
-      setMessage(`Technik dodany. Hasło: ${genPassword}`);
+      if (!res.ok) throw new Error(data.error || "Failed to add technician");
+
+      notify.success(
+        `Technician created.\nTemporary password:\n${genPassword}`
+      );
+
       setForm({ name: "", email: "" });
       setGenPassword("");
       fetchTechs();
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd przy tworzeniu technika");
+      notify.error(err.message || "Error creating technician");
     }
   }
 
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Technicians</h1>
+        <h1 className="text-2xl font-semibold text-textPrimary">Technicians</h1>
       </header>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-4 rounded shadow">
-          <h2 className="font-medium mb-3">Add new technician</h2>
-          {message && (
-            <div className="text-sm mb-3 text-red-600 whitespace-pre-wrap">
-              {message}
-            </div>
-          )}
+        {/* ADD TECHNICIAN */}
+        <div className="bg-section p-6 rounded-2xl border border-borderSoft">
+          <h2 className="font-medium mb-4 text-textPrimary">
+            Add new technician
+          </h2>
+
           <form onSubmit={handleSubmit} className="space-y-3">
             <input
               required
-              placeholder="Imię i nazwisko"
-              className="w-full px-3 py-2 border rounded"
+              placeholder="Full name"
+              className="ui-input w-full"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             />
             <input
               required
               placeholder="Email"
               type="email"
-              className="w-full px-3 py-2 border rounded"
+              className="ui-input w-full"
               value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, email: e.target.value }))
+              }
             />
 
             <div className="flex gap-2 items-center">
               <input
                 readOnly
                 value={genPassword}
-                placeholder="Wygenerowane hasło"
-                className="flex-1 px-3 py-2 border rounded bg-gray-50"
+                placeholder="Generated password"
+                className="ui-input flex-1 bg-section/50"
               />
               <button
                 type="button"
                 onClick={handleGenerate}
-                className="px-3 py-2 bg-indigo-600 text-white rounded"
+                className="ui-btn-outline"
               >
                 Generate
               </button>
             </div>
 
             <div className="flex gap-2">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-green-600 text-white rounded"
-              >
+              <button type="submit" className="ui-btn-primary">
                 Create
               </button>
               <button
@@ -147,9 +149,8 @@ export default function Technicians() {
                 onClick={() => {
                   setForm({ name: "", email: "" });
                   setGenPassword("");
-                  setMessage("");
                 }}
-                className="px-4 py-2 border rounded"
+                className="ui-btn-outline"
               >
                 Reset
               </button>
@@ -157,33 +158,37 @@ export default function Technicians() {
           </form>
         </div>
 
-        <div className="bg-white p-4 rounded shadow">
-          <h2 className="font-medium mb-3">Existing technicians</h2>
+        {/* LIST */}
+        <div className="bg-section p-6 rounded-2xl border border-borderSoft">
+          <h2 className="font-medium mb-4 text-textPrimary">
+            Existing technicians
+          </h2>
+
           {loading ? (
-            <div>Loading...</div>
+            <div className="text-textSecondary">Loading…</div>
           ) : (
             <ul className="space-y-2">
               {techs.length === 0 && (
-                <li className="text-sm text-gray-500">No technicians</li>
+                <li className="text-sm text-textSecondary">No technicians</li>
               )}
               {techs.map((t) => (
                 <li
                   key={t.id ?? t._id ?? t.email}
-                  className="flex items-center justify-between border-b py-2"
+                  className="flex items-center justify-between py-2 border-b border-borderSoft"
                 >
                   <div>
-                    <div className="font-medium">{t.name || "—"}</div>
-                    <div className="text-xs text-gray-500">{t.email}</div>
+                    <div className="font-medium text-textPrimary">
+                      {t.name || "—"}
+                    </div>
+                    <div className="text-xs text-textSecondary">{t.email}</div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedTech(t)} // przekazujemy cały obiekt
-                      className="px-3 py-1 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700"
-                    >
-                      Szczegóły
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setSelectedTech(t)}
+                    className="ui-btn-primary text-sm"
+                  >
+                    Details
+                  </button>
                 </li>
               ))}
             </ul>
@@ -191,7 +196,6 @@ export default function Technicians() {
         </div>
       </section>
 
-      {/* Modal: TechnicianDetails */}
       {selectedTech && (
         <TechnicianDetails
           tech={selectedTech}

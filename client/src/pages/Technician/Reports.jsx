@@ -1,30 +1,36 @@
-// src/pages/Technician/Reports.jsx
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import ReportDetails from "../../components/ReportDetails";
+import { useNotify } from "../../notifications/NotificationContext";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
+function truncate(text, max = 80) {
+  if (!text) return "—";
+  return text.length > max ? text.slice(0, max) + "…" : text;
+}
+
 export default function TechnicianReports() {
   const token = localStorage.getItem("token");
+  const notify = useNotify();
+
   const [reports, setReports] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingJobs, setLoadingJobs] = useState(false);
-  const [message, setMessage] = useState("");
   const [showModalNew, setShowModalNew] = useState(false);
   const [selectedForDetails, setSelectedForDetails] = useState(null);
 
-  // form state for new report
+  // new report form
   const [selectedJobId, setSelectedJobId] = useState("");
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState([]);
 
-  // UI state: filtering & sorting
+  // filters
   const [qText, setQText] = useState("");
   const [onlyWithPhotos, setOnlyWithPhotos] = useState(false);
-  const [dateFrom, setDateFrom] = useState(""); // yyyy-mm-dd
-  const [dateTo, setDateTo] = useState(""); // yyyy-mm-dd
-  const [sortOrder, setSortOrder] = useState("newest"); // "newest" or "oldest"
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortOrder, setSortOrder] = useState("newest");
 
   const buildHeaders = (extra = {}) => {
     const h = { ...extra };
@@ -34,26 +40,20 @@ export default function TechnicianReports() {
 
   const fetchReports = useCallback(async () => {
     setLoading(true);
-    setMessage("");
     try {
       const res = await fetch(`${API_BASE}/api/technician/reports`, {
         headers: buildHeaders({ "Content-Type": "application/json" }),
       });
       const body = await res.json();
-      if (!res.ok)
-        throw new Error(
-          (body && (body.error || body.message)) ||
-            `${res.status} ${res.statusText}`
-        );
-      // Ensure created_at is preserved; sorting will be done client-side
+      if (!res.ok) throw new Error(body?.error || body?.message || res.status);
       setReports(body.reports || []);
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd podczas pobierania raportów");
+      notify.error(err.message || "Error while fetching reports");
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, notify]);
 
   const fetchJobs = useCallback(async () => {
     setLoadingJobs(true);
@@ -62,29 +62,21 @@ export default function TechnicianReports() {
         headers: buildHeaders({ "Content-Type": "application/json" }),
       });
       const body = await res.json();
-      if (!res.ok)
-        throw new Error(
-          (body && (body.error || body.message)) ||
-            `${res.status} ${res.statusText}`
-        );
+      if (!res.ok) throw new Error(body?.error || body?.message || res.status);
       setJobs(body.jobs || []);
     } catch (err) {
       console.error(err);
+      notify.error(err.message || "Error while fetching jobs");
     } finally {
       setLoadingJobs(false);
     }
-  }, [token]);
+  }, [token, notify]);
 
   useEffect(() => {
+    if (!token) return;
     fetchReports();
     fetchJobs();
-  }, [fetchReports, fetchJobs]);
-
-  function formatDate(dateStr) {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    return isNaN(d) ? dateStr : d.toLocaleString();
-  }
+  }, [token, fetchReports, fetchJobs]);
 
   function onFilesChange(e) {
     setFiles(Array.from(e.target.files || []));
@@ -92,105 +84,68 @@ export default function TechnicianReports() {
 
   async function handleSubmitNew(e) {
     e.preventDefault();
-    setMessage("");
-    if (!selectedJobId) return setMessage("Wybierz zlecenie.");
+
+    if (!selectedJobId) {
+      notify.error("Please select a job");
+      return;
+    }
+
     try {
       const fd = new FormData();
       fd.append("description", description || "");
       files.forEach((f) => fd.append("photos", f));
+
       const res = await fetch(
         `${API_BASE}/api/technician/jobs/${selectedJobId}/reports`,
-        {
-          method: "POST",
-          headers: buildHeaders(), // do not set Content-Type
-          body: fd,
-        }
+        { method: "POST", headers: buildHeaders(), body: fd }
       );
+
       const body = await res.json();
-      if (!res.ok)
-        throw new Error(
-          (body && (body.error || body.message)) ||
-            `${res.status} ${res.statusText}`
-        );
+      if (!res.ok) throw new Error(body?.error || body?.message || res.status);
+
+      notify.success("Report has been submitted");
+
       setSelectedJobId("");
       setDescription("");
       setFiles([]);
       setShowModalNew(false);
-      await fetchReports();
+      fetchReports();
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd przy wysyłaniu raportu");
+      notify.error(err.message || "Error while submitting report");
     }
   }
 
-  // ---------- filtering & sorting logic ----------
   const filteredAndSortedReports = useMemo(() => {
-    const q = (qText || "").trim().toLowerCase();
+    const q = qText.trim().toLowerCase();
 
-    // parse date inputs: keep them as Date objects at start/end of day
-    let from = null;
-    let to = null;
-    if (dateFrom) {
-      const d = new Date(dateFrom);
-      if (!isNaN(d))
-        from = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
-    }
-    if (dateTo) {
-      const d = new Date(dateTo);
-      if (!isNaN(d))
-        to = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-    }
+    return (reports || [])
+      .filter((r) => {
+        if (onlyWithPhotos && (!r.photos || r.photos.length === 0))
+          return false;
 
-    const filtered = (reports || []).filter((r) => {
-      if (!r) return false;
+        if (dateFrom || dateTo) {
+          const created = r.created_at ? new Date(r.created_at) : null;
+          if (!created) return false;
+          if (dateFrom && created < new Date(dateFrom)) return false;
+          if (dateTo && created > new Date(dateTo + "T23:59:59")) return false;
+        }
 
-      // filter by photos
-      if (onlyWithPhotos) {
-        if (!Array.isArray(r.photos) || r.photos.length === 0) return false;
-      }
+        if (q) {
+          const hay =
+            `${r.id} ${r.job_external_number} ${r.job_title} ${r.description}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
 
-      // filter by date range
-      if (from || to) {
-        const created = r.created_at ? new Date(r.created_at) : null;
-        if (!created) return false;
-        if (from && created < from) return false;
-        if (to && created > to) return false;
-      }
-
-      // text search: id, job_title, job_external_number, description
-      if (q) {
-        const idMatch = String(r.id || "")
-          .toLowerCase()
-          .includes(q);
-        const extMatch = String(r.job_external_number || "")
-          .toLowerCase()
-          .includes(q);
-        const titleMatch = String(r.job_title || "")
-          .toLowerCase()
-          .includes(q);
-        const descMatch = String(r.description || "")
-          .toLowerCase()
-          .includes(q);
-        if (!(idMatch || extMatch || titleMatch || descMatch)) return false;
-      }
-
-      return true;
-    });
-
-    const sorted = filtered.sort((a, b) => {
-      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-      if (sortOrder === "newest") {
-        return tb - ta;
-      } else {
-        return ta - tb;
-      }
-    });
-
-    return sorted;
+        return true;
+      })
+      .sort((a, b) =>
+        sortOrder === "newest"
+          ? new Date(b.created_at) - new Date(a.created_at)
+          : new Date(a.created_at) - new Date(b.created_at)
+      );
   }, [reports, qText, onlyWithPhotos, dateFrom, dateTo, sortOrder]);
 
-  // reset filters helper
   function resetFilters() {
     setQText("");
     setOnlyWithPhotos(false);
@@ -202,156 +157,146 @@ export default function TechnicianReports() {
   return (
     <div className="space-y-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Raporty technika</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              fetchReports();
-              fetchJobs();
-            }}
-            className="px-3 py-2 bg-indigo-600 text-white rounded"
-          >
-            Odśwież
+        <h1 className="text-2xl font-semibold text-textPrimary">
+          Technician reports
+        </h1>
+
+        <div className="flex gap-2">
+          <button onClick={fetchReports} className="ui-btn-outline">
+            Refresh
           </button>
           <button
             onClick={() => setShowModalNew(true)}
-            className="px-3 py-2 bg-green-600 text-white rounded"
+            className="ui-btn-primary"
           >
-            Nowy raport
+            New report
           </button>
         </div>
       </header>
 
-      {/* Filters / Sorting UI */}
-      <section className="bg-white p-4 rounded shadow">
+      {/* FILTERS */}
+      <section className="bg-section p-4 rounded-2xl border border-borderSoft">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Szukaj (id, tytuł, opis, numer zlecenia)..."
-              value={qText}
-              onChange={(e) => setQText(e.target.value)}
-              className="w-full border rounded px-2 py-1"
-            />
-          </div>
+          <input
+            placeholder="Search…"
+            value={qText}
+            onChange={(e) => setQText(e.target.value)}
+            className="ui-input w-full"
+          />
 
-          <div className="flex items-center gap-2">
-            <label className="text-sm">Data od:</label>
+          <div className="flex gap-2">
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="border rounded px-2 py-1"
+              className="ui-input w-full"
             />
-            <label className="text-sm">do:</label>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="border rounded px-2 py-1"
+              className="ui-input w-full"
             />
           </div>
 
           <div className="flex items-center justify-end gap-3">
-            <label className="inline-flex items-center gap-2">
+            <label className="flex items-center gap-2 text-sm text-textSecondary">
               <input
                 type="checkbox"
                 checked={onlyWithPhotos}
                 onChange={(e) => setOnlyWithPhotos(e.target.checked)}
               />
-              <span className="text-sm">Tylko ze zdjęciami</span>
+              Only with photos
             </label>
 
             <select
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
-              className="border rounded px-2 py-1"
+              className="ui-input"
             >
-              <option value="newest">Najnowsze</option>
-              <option value="oldest">Najstarsze</option>
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
             </select>
 
-            <button
-              onClick={resetFilters}
-              className="px-2 py-1 border rounded text-sm"
-            >
-              Wyczyść
+            <button onClick={resetFilters} className="ui-btn-outline text-sm">
+              Clear
             </button>
           </div>
         </div>
       </section>
 
-      <section className="bg-white p-4 rounded shadow space-y-4">
-        {message && <div className="text-sm text-red-600">{message}</div>}
-
+      {/* TABLE */}
+      <section className="bg-section p-4 rounded-2xl border border-borderSoft">
         <div className="overflow-x-auto">
-          <table className="min-w-full table-auto">
+          <table className="min-w-full table-auto text-sm">
             <thead>
-              <tr className="text-left text-sm text-gray-600">
+              <tr className="text-left text-textSecondary border-b border-borderSoft">
                 <th className="px-3 py-2">ID</th>
-                <th className="px-3 py-2">Zlecenie</th>
-                <th className="px-3 py-2">Tytuł zlecenia</th>
-                <th className="px-3 py-2">Opis</th>
-                <th className="px-3 py-2">Zdjęcia</th>
-                <th className="px-3 py-2">Data</th>
-                <th className="px-3 py-2">Akcje</th>
+                <th className="px-3 py-2">Job</th>
+                <th className="px-3 py-2">Title</th>
+                <th className="px-3 py-2">Description</th>
+                <th className="px-3 py-2">Photos</th>
+                <th className="px-3 py-2">Date</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="px-3 py-6 text-center">
-                    Ładowanie...
+                  <td
+                    colSpan="7"
+                    className="px-3 py-6 text-center text-textSecondary"
+                  >
+                    Loading…
                   </td>
                 </tr>
               ) : filteredAndSortedReports.length === 0 ? (
                 <tr>
                   <td
                     colSpan="7"
-                    className="px-3 py-6 text-center text-gray-500"
+                    className="px-3 py-6 text-center text-textSecondary"
                   >
-                    Brak raportów.
+                    No reports found.
                   </td>
                 </tr>
               ) : (
                 filteredAndSortedReports.map((r) => {
                   const photos = r.photos || [];
                   const extra = Math.max(0, photos.length - 3);
+
                   return (
-                    <tr key={r.id} className="even:bg-gray-50">
-                      <td className="px-3 py-2">{r.id}</td>
-                      <td className="px-3 py-2">
+                    <tr
+                      key={r.id}
+                      className="border-b border-borderSoft last:border-none"
+                    >
+                      <td className="px-3 py-2 text-textPrimary">{r.id}</td>
+                      <td className="px-3 py-2 text-textPrimary">
                         {r.job_external_number || `#${r.job_id}`}
                       </td>
-                      <td className="px-3 py-2">{r.job_title || "—"}</td>
-                      <td className="px-3 py-2">
-                        <div>{r.description || "—"}</div>
+                      <td className="px-3 py-2 text-textPrimary">
+                        {r.job_title || "—"}
+                      </td>
+                      <td className="px-3 py-2 text-textSecondary">
+                        {truncate(r.description, 80)}
                       </td>
 
                       <td className="px-3 py-2">
                         {photos.length > 0 ? (
                           <div className="flex items-center gap-2">
                             {photos.slice(0, 3).map((p) => (
-                              <a
+                              <img
                                 key={p.id}
-                                href={p.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block"
-                              >
-                                <img
-                                  src={p.url}
-                                  alt={p.original_name || "photo"}
-                                  className="w-20 h-20 object-cover rounded shadow"
-                                />
-                              </a>
+                                src={p.url}
+                                alt=""
+                                className="w-14 h-14 rounded object-cover cursor-pointer"
+                                onClick={() => setSelectedForDetails(r)}
+                              />
                             ))}
                             {extra > 0 && (
                               <button
                                 onClick={() => setSelectedForDetails(r)}
-                                className="px-2 py-1 text-xs border rounded bg-gray-100"
-                                title={`Pokaż wszystkie (${photos.length})`}
+                                className="ui-btn-outline text-xs"
                               >
                                 +{extra}
                               </button>
@@ -362,14 +307,16 @@ export default function TechnicianReports() {
                         )}
                       </td>
 
-                      <td className="px-3 py-2">{formatDate(r.created_at)}</td>
+                      <td className="px-3 py-2 text-textPrimary">
+                        {new Date(r.created_at).toLocaleString()}
+                      </td>
 
                       <td className="px-3 py-2">
                         <button
                           onClick={() => setSelectedForDetails(r)}
-                          className="px-2 py-1 border rounded text-sm"
+                          className="ui-btn-outline text-sm"
                         >
-                          Szczegóły
+                          Details
                         </button>
                       </td>
                     </tr>
@@ -381,87 +328,55 @@ export default function TechnicianReports() {
         </div>
       </section>
 
-      {/* New report modal */}
+      {/* NEW REPORT MODAL */}
       {showModalNew && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded shadow max-w-2xl w-full p-6">
-            <header className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Nowy raport</h2>
-              <button
-                onClick={() => setShowModalNew(false)}
-                className="text-gray-500 hover:text-gray-800"
-              >
-                Zamknij
-              </button>
-            </header>
-
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4">
+          <div className="bg-modal w-full max-w-2xl rounded-2xl border border-borderSoft p-6">
             <form onSubmit={handleSubmitNew} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Zlecenie
-                </label>
-                <select
-                  value={selectedJobId}
-                  onChange={(e) => setSelectedJobId(e.target.value)}
-                  className="w-full border rounded px-2 py-1"
-                >
-                  <option value="">-- wybierz zlecenie --</option>
-                  {loadingJobs ? (
-                    <option disabled>Ładowanie zleceń...</option>
-                  ) : jobs.length === 0 ? (
-                    <option disabled>Brak zleceń</option>
-                  ) : (
-                    jobs.map((j) => (
-                      <option key={j.id} value={j.id}>
-                        {j.external_number
-                          ? `${j.external_number} — ${j.title}`
-                          : j.title || `#${j.id}`}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
+              <h2 className="text-lg font-semibold text-textPrimary">
+                New report
+              </h2>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Opis</label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
-                  className="w-full border rounded p-2"
-                />
-              </div>
+              <select
+                value={selectedJobId}
+                onChange={(e) => setSelectedJobId(e.target.value)}
+                className="ui-input w-full"
+              >
+                <option value="">Select job…</option>
+                {jobs.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.external_number
+                      ? `${j.external_number} — ${j.title}`
+                      : j.title}
+                  </option>
+                ))}
+              </select>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Zdjęcia (max 6)
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={onFilesChange}
-                />
-                {files.length > 0 && (
-                  <div className="text-xs text-gray-600 mt-1">
-                    Wybrane: {files.map((f) => f.name).join(", ")}
-                  </div>
-                )}
-              </div>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className="ui-input w-full"
+                placeholder="Report description"
+              />
 
-              <div className="flex gap-2 justify-end">
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={onFilesChange}
+              />
+
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowModalNew(false)}
-                  className="px-3 py-2 border rounded"
+                  className="ui-btn-outline"
                 >
-                  Anuluj
+                  Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="px-3 py-2 bg-indigo-600 text-white rounded"
-                >
-                  Wyślij raport
+                <button type="submit" className="ui-btn-primary">
+                  Submit report
                 </button>
               </div>
             </form>
@@ -469,7 +384,6 @@ export default function TechnicianReports() {
         </div>
       )}
 
-      {/* Report details modal */}
       {selectedForDetails && (
         <ReportDetails
           initialReport={selectedForDetails}

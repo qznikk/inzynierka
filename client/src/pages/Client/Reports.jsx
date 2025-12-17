@@ -1,110 +1,151 @@
 import React, { useEffect, useState } from "react";
+import { useNotify } from "../../notifications/NotificationContext";
 
-export default function ClientReports() {
-  const API = import.meta.env.VITE_API_URL || "http://localhost:5050";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5050";
+
+export default function Reports() {
   const token = localStorage.getItem("token");
+  const notify = useNotify();
 
   const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [reportsByJob, setReportsByJob] = useState({});
+  const [openJobId, setOpenJobId] = useState(null);
 
   useEffect(() => {
+    if (!token) return;
     fetchJobs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
   async function fetchJobs() {
-    setLoading(true);
-    setMessage("");
     try {
       const res = await fetch(`${API}/api/client/jobs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Failed to fetch jobs");
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error loading jobs");
       }
 
       const data = await res.json();
-      setJobs(data.jobs || data || []);
+      setJobs(data.jobs || []);
     } catch (err) {
       console.error(err);
-      setMessage(err.message || "Błąd podczas pobierania zleceń");
-    } finally {
-      setLoading(false);
+      notify.error(err.message || "Error loading jobs");
+    }
+  }
+
+  async function fetchReports(jobId) {
+    try {
+      const res = await fetch(`${API}/api/client/jobs/${jobId}/reports`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Error loading reports");
+      }
+
+      const data = await res.json();
+
+      setReportsByJob((prev) => ({
+        ...prev,
+        [jobId]: data.reports || [],
+      }));
+      setOpenJobId(jobId);
+    } catch (err) {
+      console.error(err);
+      notify.error(err.message || "Error loading reports");
     }
   }
 
   function formatDate(d) {
-    if (!d) return "—";
-    const dt = new Date(d);
-    return isNaN(dt) ? d : dt.toLocaleString();
+    try {
+      return new Date(d).toLocaleString();
+    } catch {
+      return d;
+    }
   }
 
   return (
     <div className="space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Moje zlecenia</h1>
+      <h1 className="text-2xl font-semibold text-textPrimary">
+        My jobs and reports
+      </h1>
 
-        <button
-          onClick={fetchJobs}
-          className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+      {jobs.length === 0 && (
+        <div className="text-sm text-textSecondary">No jobs</div>
+      )}
+
+      {jobs.map((j) => (
+        <div
+          key={j.id}
+          className="bg-section border border-borderSoft rounded-2xl p-4"
         >
-          Odśwież
-        </button>
-      </header>
+          <div className="flex justify-between items-start">
+            <div>
+              <div className="font-medium text-textPrimary">
+                {j.external_number || `Job #${j.id}`}
+              </div>
+              <div className="text-sm text-textSecondary">{j.title}</div>
+            </div>
 
-      <section className="bg-white p-4 rounded shadow">
-        <h2 className="font-medium mb-3">Lista zleceń</h2>
+            <button
+              onClick={() =>
+                openJobId === j.id ? setOpenJobId(null) : fetchReports(j.id)
+              }
+              className="ui-btn-outline text-sm"
+            >
+              {openJobId === j.id ? "Hide reports" : "Show reports"}
+            </button>
+          </div>
 
-        {loading ? (
-          <div>Ładowanie...</div>
-        ) : (
-          <>
-            {message && (
-              <div className="text-red-600 text-sm mb-3">{message}</div>
-            )}
-
-            {jobs.length === 0 ? (
-              <div className="text-sm text-gray-500">Brak zleceń</div>
-            ) : (
-              <ul className="space-y-2">
-                {jobs.map((j) => (
-                  <li
-                    key={j.id}
-                    className="border rounded p-3 flex justify-between items-start"
+          {openJobId === j.id && (
+            <div className="mt-4 space-y-3">
+              {(reportsByJob[j.id] || []).length === 0 ? (
+                <div className="text-sm text-textSecondary">No reports</div>
+              ) : (
+                reportsByJob[j.id].map((r) => (
+                  <div
+                    key={r.id}
+                    className="bg-section/60 border border-borderSoft rounded-xl p-3"
                   >
-                    <div>
-                      <div className="font-medium">
-                        {j.external_number || `Zlecenie #${j.id}`}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {j.title || "Bez tytułu"}
-                      </div>
-                      {j.description && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {j.description}
-                        </div>
-                      )}
+                    <div className="text-sm font-medium text-textPrimary">
+                      Report #{r.id}
+                    </div>
+                    <div className="text-xs text-textSecondary">
+                      {formatDate(r.created_at)}
                     </div>
 
-                    <div className="text-right text-sm">
-                      <div className="font-semibold">{j.status}</div>
-                      <div className="text-xs text-gray-600">
-                        Planowane: {formatDate(j.scheduled_date)}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        Utworzone: {formatDate(j.created_at)}
-                      </div>
+                    <div className="mt-1 text-sm text-textPrimary">
+                      {r.description || "—"}
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </section>
+
+                    {Array.isArray(r.photos) && r.photos.length > 0 && (
+                      <div className="flex gap-2 mt-3 flex-wrap">
+                        {r.photos.map((p) => (
+                          <a
+                            key={p.id}
+                            href={p.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <img
+                              src={p.url}
+                              alt={p.original_name || "photo"}
+                              className="w-20 h-20 object-cover rounded-lg border border-borderSoft"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

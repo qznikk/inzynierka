@@ -209,7 +209,6 @@ router.delete("/:id", auth, requireRole("ADMIN"), async (req, res) => {
 });
 
 /**
- * ADMIN — potwierdzenie płatności zgłoszonej przez klienta
  * POST /api/admin/invoices/:id/confirm-pay
  */
 router.post(
@@ -229,7 +228,6 @@ router.post(
         return res.json(inv);
       }
 
-      // we allow admin to confirm regardless of previous status, but typically should be PENDING_CONFIRMATION
       const { rows } = await pool.query(
         `UPDATE invoices
        SET status='PAID', paid_at = NOW(), updated_at = NOW()
