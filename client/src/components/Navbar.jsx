@@ -14,7 +14,12 @@ export default function Navbar() {
   const [theme, setTheme] = useState("light");
 
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
-  const [regForm, setRegForm] = useState({ name: "", email: "", password: "" });
+  const [regForm, setRegForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
 
   const navBtn =
     "px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-sm disabled:opacity-60";
@@ -67,6 +72,32 @@ export default function Navbar() {
     else navigate("/");
   }
 
+  /* ===================== VALIDATION ===================== */
+  function validateRegisterForm() {
+    if (regForm.name.trim().length < 3) {
+      notify.error("Name must have at least 3 characters");
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(regForm.email)) {
+      notify.error("Please enter a valid email address");
+      return false;
+    }
+
+    if (regForm.password.length < 6) {
+      notify.error("Password must be at least 6 characters long");
+      return false;
+    }
+
+    if (regForm.password !== regForm.confirmPassword) {
+      notify.error("Passwords do not match");
+      return false;
+    }
+
+    return true;
+  }
+
   async function handleLogin(e) {
     e.preventDefault();
     setLoading(true);
@@ -97,13 +128,20 @@ export default function Navbar() {
 
   async function handleRegister(e) {
     e.preventDefault();
+
+    if (!validateRegisterForm()) return;
+
     setLoading(true);
 
     try {
       const res = await fetch(`${API}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(regForm),
+        body: JSON.stringify({
+          name: regForm.name,
+          email: regForm.email,
+          password: regForm.password,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -133,23 +171,16 @@ export default function Navbar() {
 
   return (
     <>
-      {/* NAVBAR */}
       <nav className="w-full h-16 bg-navbar border-b border-borderSoft">
         <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
-          {/* LOGO */}
-          <div className="flex items-center gap-3">
-            <span className="font-semibold text-textPrimary text-lg">
-              HVACapp
-            </span>
-          </div>
+          <span className="font-semibold text-textPrimary text-lg">
+            HVACapp
+          </span>
 
-          {/* ACTIONS */}
           <div className="flex items-center gap-3">
-            {/* 🌙 THEME TOGGLE */}
             <button
               onClick={toggleTheme}
               className={`${navBtn} border border-borderMedium text-textPrimary`}
-              title="Toggle dark / light mode"
             >
               {theme === "light" ? "🌙" : "☀️"}
             </button>
@@ -181,27 +212,15 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* MODAL */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-overlay backdrop-blur-sm"
-            onClick={close}
-          />
+          <div className="absolute inset-0 bg-overlay" onClick={close} />
 
           <div className="relative w-full max-w-md mx-4">
             <div className="bg-modal rounded-2xl shadow-xl p-6 border border-borderSoft">
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-semibold text-textPrimary">
-                  {showModal === "login" ? "Login" : "Register"}
-                </h3>
-                <button
-                  onClick={close}
-                  className="text-textSecondary hover:text-textPrimary"
-                >
-                  ✕
-                </button>
-              </div>
+              <h3 className="text-lg font-semibold text-textPrimary mb-5">
+                {showModal === "login" ? "Login" : "Register"}
+              </h3>
 
               {showModal === "login" ? (
                 <form onSubmit={handleLogin} className="space-y-4">
@@ -228,7 +247,6 @@ export default function Navbar() {
                     }
                     className="ui-input w-full"
                   />
-
                   <button
                     type="submit"
                     disabled={loading}
@@ -265,14 +283,23 @@ export default function Navbar() {
                     placeholder="Password"
                     value={regForm.password}
                     onChange={(e) =>
+                      setRegForm({ ...regForm, password: e.target.value })
+                    }
+                    className="ui-input w-full"
+                  />
+                  <input
+                    required
+                    type="password"
+                    placeholder="Confirm password"
+                    value={regForm.confirmPassword}
+                    onChange={(e) =>
                       setRegForm({
                         ...regForm,
-                        password: e.target.value,
+                        confirmPassword: e.target.value,
                       })
                     }
                     className="ui-input w-full"
                   />
-
                   <button
                     type="submit"
                     disabled={loading}
