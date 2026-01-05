@@ -46,15 +46,67 @@ export default function CreateJobModal({
     }));
   }
 
+  /* ===================== VALIDATION ===================== */
+  function validateForm() {
+    const letterRegex = /[a-zA-Z]{2,}/;
+
+    if (!form.client_id) {
+      notify.error("Please select a client");
+      return false;
+    }
+
+    if (form.title.trim().length < 10) {
+      notify.error("Title must be at least 10 characters long");
+      return false;
+    }
+
+    if (!letterRegex.test(form.title)) {
+      notify.error("Title must contain at least 2 letters");
+      return false;
+    }
+
+    if (form.description.trim().length < 50) {
+      notify.error("Description must be at least 50 characters long");
+      return false;
+    }
+
+    if (!form.address.trim()) {
+      notify.error("Address is required");
+      return false;
+    }
+
+    if (form.address.trim().length < 10) {
+      notify.error("Address must be at least 10 characters long");
+      return false;
+    }
+
+    const addressRegex = /[a-zA-Z]+.*\d+|\d+.*[a-zA-Z]+/;
+    if (!addressRegex.test(form.address)) {
+      notify.error("Address must contain both letters and a number");
+      return false;
+    }
+
+    if (!form.scheduled_date) {
+      notify.error("Please select a preferred service date");
+      return false;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const selectedDate = new Date(form.scheduled_date);
+    if (selectedDate < today) {
+      notify.error("The selected date cannot be in the past");
+      return false;
+    }
+
+    return true;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (!form.client_id || !form.title || !form.description) {
-      notify.error(
-        "Please fill in the required fields: client, title and description."
-      );
-      return;
-    }
+    if (!validateForm()) return;
 
     setLoading(true);
     try {
@@ -65,8 +117,8 @@ export default function CreateJobModal({
         description: form.description,
         status: form.status,
         priority: Number(form.priority),
-        scheduled_date: form.scheduled_date || null,
-        address: form.address || null,
+        scheduled_date: form.scheduled_date,
+        address: form.address,
       };
 
       const res = await fetch(`${apiBase}/api/admin/jobs`, {
@@ -95,19 +147,16 @@ export default function CreateJobModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-      {/* OVERLAY */}
       <div
         className="absolute inset-0 bg-overlay backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* MODAL */}
       <form
         onSubmit={handleSubmit}
         className="relative w-full max-w-3xl bg-modal rounded-2xl
                    border border-borderSoft shadow-xl p-6"
       >
-        {/* HEADER */}
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-textPrimary">New Job</h3>
           <p className="text-sm text-textSecondary">
@@ -115,7 +164,6 @@ export default function CreateJobModal({
           </p>
         </div>
 
-        {/* HVAC PRESETS */}
         <section className="mb-6">
           <div className="text-sm font-medium text-textPrimary mb-2">
             Suggested HVAC Services
@@ -137,9 +185,7 @@ export default function CreateJobModal({
           </div>
         </section>
 
-        {/* FORM */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* CLIENT */}
           <Field label="Client" required>
             <select
               name="client_id"
@@ -156,7 +202,6 @@ export default function CreateJobModal({
             </select>
           </Field>
 
-          {/* TECHNICIAN */}
           <Field label="Technician">
             <select
               name="technician_id"
@@ -173,41 +218,34 @@ export default function CreateJobModal({
             </select>
           </Field>
 
-          {/* TITLE */}
           <Field label="Title" required className="md:col-span-2">
             <input
               name="title"
               value={form.title}
               onChange={handleChange}
               className="ui-input w-full"
-              placeholder="Short description of the issue"
             />
           </Field>
 
-          {/* DESCRIPTION */}
           <Field label="Description" required className="md:col-span-2">
             <textarea
               name="description"
               value={form.description}
               onChange={handleChange}
               className="ui-input w-full h-40 resize-none"
-              placeholder="Describe the problem and any relevant details"
             />
           </Field>
 
-          {/* ADDRESS */}
-          <Field label="Address" className="md:col-span-2">
+          <Field label="Address" required className="md:col-span-2">
             <input
               name="address"
               value={form.address}
               onChange={handleChange}
               className="ui-input w-full"
-              placeholder="City, street, apartment number"
             />
           </Field>
 
-          {/* DATE */}
-          <Field label="Preferred date">
+          <Field label="Preferred date" required>
             <input
               type="date"
               name="scheduled_date"
@@ -218,7 +256,6 @@ export default function CreateJobModal({
           </Field>
         </div>
 
-        {/* ACTIONS */}
         <div className="flex justify-end gap-3 mt-6">
           <button
             type="button"
