@@ -34,15 +34,60 @@ export default function ClientOrders() {
     }));
   }
 
+  /* ===================== VALIDATION ===================== */
+  function validateForm() {
+    const letterRegex = /[a-zA-Z]{2,}/;
+
+    if (form.title.trim().length < 10) {
+      notify.error("Title must be at least 10 characters long");
+      return false;
+    }
+
+    if (!letterRegex.test(form.title)) {
+      notify.error("Title must contain at least 2 letters");
+      return false;
+    }
+
+    if (form.description.trim().length < 50) {
+      notify.error("Description must be at least 50 characters long");
+      return false;
+    }
+
+    if (form.address.trim()) {
+      if (form.address.trim().length < 10) {
+        notify.error("Address must be at least 10 characters long");
+        return false;
+      }
+
+      const addressRegex = /[a-zA-Z]+.*\d+|\d+.*[a-zA-Z]+/;
+      if (!addressRegex.test(form.address)) {
+        notify.error("Address must contain both letters and a number");
+        return false;
+      }
+    }
+
+    if (!form.scheduled_date) {
+      notify.error("Please select a preferred service date");
+      return false;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const selectedDate = new Date(form.scheduled_date);
+
+    if (selectedDate < today) {
+      notify.error("The selected date cannot be in the past");
+      return false;
+    }
+
+    return true;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (!form.title || !form.description) {
-      notify.error(
-        "Please fill in the required fields: title and description."
-      );
-      return;
-    }
+    if (!validateForm()) return;
 
     setLoading(true);
     try {
