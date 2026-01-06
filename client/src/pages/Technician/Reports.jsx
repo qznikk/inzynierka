@@ -85,23 +85,45 @@ export default function TechnicianReports() {
   async function handleSubmitNew(e) {
     e.preventDefault();
 
+    const trimmedDescription = description.trim();
+
     if (!selectedJobId) {
       notify.error("Please select a job");
       return;
     }
 
+    if (!trimmedDescription && files.length === 0) {
+      notify.error("Please add a description or at least one photo");
+      return;
+    }
+
+    if (trimmedDescription && trimmedDescription.length < 25) {
+      notify.error("Description must be at least 25 characters long");
+      return;
+    }
+
     try {
       const fd = new FormData();
-      fd.append("description", description || "");
+
+      if (trimmedDescription) {
+        fd.append("description", trimmedDescription);
+      }
+
       files.forEach((f) => fd.append("photos", f));
 
       const res = await fetch(
         `${API_BASE}/api/technician/jobs/${selectedJobId}/reports`,
-        { method: "POST", headers: buildHeaders(), body: fd }
+        {
+          method: "POST",
+          headers: buildHeaders(),
+          body: fd,
+        }
       );
 
       const body = await res.json();
-      if (!res.ok) throw new Error(body?.error || body?.message || res.status);
+      if (!res.ok) {
+        throw new Error(body?.error || body?.message || res.status);
+      }
 
       notify.success("Report has been submitted");
 

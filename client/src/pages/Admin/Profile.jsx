@@ -32,6 +32,30 @@ export default function AdminProfile() {
     fetchProfile();
   }, [token]);
 
+  function validate(form) {
+    const errors = {};
+
+    if (!/^[A-Za-zÀ-ž\s-]{3,}$/.test(form.name))
+      errors.name = "Name must contain at least 3 letters";
+
+    if (!/^\d{9}$/.test(form.phone))
+      errors.phone = "Phone number must contain exactly 9 digits";
+
+    if (!/^[A-Za-zÀ-ž0-9\s.,/]{5,}$/.test(form.address))
+      errors.address = "Address must contain at least 5 characters";
+
+    if (!/^[A-Za-zÀ-ž\s]{2,}$/.test(form.city))
+      errors.city = "City must contain at least 2 letters";
+
+    if (!/^[A-Za-z0-9-]{3,10}$/.test(form.postal_code))
+      errors.postal_code = "Invalid postal code format";
+
+    if (!/^[A-Za-zÀ-ž\s]{2,}$/.test(form.country))
+      errors.country = "Country must contain at least 2 letters";
+
+    return errors;
+  }
+
   async function fetchProfile() {
     setLoading(true);
     try {
@@ -63,6 +87,12 @@ export default function AdminProfile() {
     setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
 
   async function save() {
+    const errors = validate(form);
+
+    if (Object.keys(errors).length > 0) {
+      Object.values(errors).forEach((msg) => notify.error(msg));
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/profile`, {

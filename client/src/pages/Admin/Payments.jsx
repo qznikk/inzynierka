@@ -109,8 +109,51 @@ export default function AdminPayments() {
     }
   }
 
+  function validateInvoiceForm() {
+    if (!form.client_id) {
+      notify.error("Please select a client");
+      return false;
+    }
+
+    if (!form.amount) {
+      notify.error("Amount is required");
+      return false;
+    }
+
+    const amountRegex = /^\d+(\.\d{1,2})?$/;
+    if (!amountRegex.test(form.amount)) {
+      notify.error("Amount must be a valid number");
+      return false;
+    }
+
+    if (!form.due_date) {
+      notify.error("Please select a due date");
+      return false;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const selectedDate = new Date(form.due_date);
+
+    if (selectedDate < today) {
+      notify.error("Due date cannot be in the past");
+      return false;
+    }
+
+    if (!form.description || form.description.trim().length < 10) {
+      notify.error("Description must contain at least 10 characters");
+      return false;
+    }
+
+    return true;
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
+
+    if (!validateInvoiceForm()) return;
+
     try {
       const res = await fetch(`${API_BASE}/api/admin/invoices`, {
         method: "POST",
@@ -156,6 +199,9 @@ export default function AdminPayments() {
 
   async function handleEditSubmit(e) {
     e.preventDefault();
+
+    if (!validateInvoiceForm()) return;
+
     try {
       const res = await fetch(
         `${API_BASE}/api/admin/invoices/${editInvoice.id}`,

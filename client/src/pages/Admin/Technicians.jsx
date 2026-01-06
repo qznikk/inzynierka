@@ -54,8 +54,36 @@ export default function Technicians() {
     setGenPassword(randomPassword(12));
   }
 
+  function validateForm() {
+    if (!form.name || form.name.trim().length < 3) {
+      notify.error("Name must contain at least 3 characters");
+      return false;
+    }
+
+    if (!form.email) {
+      notify.error("Email is required");
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(form.email)) {
+      notify.error("Please enter a valid email address");
+      return false;
+    }
+
+    if (!genPassword) {
+      notify.error("Please generate a password");
+      return false;
+    }
+
+    return true;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
+
+    if (!validateForm()) return;
 
     if (!form.name || !form.email || !genPassword) {
       notify.error("Please fill in all fields and generate a password.");

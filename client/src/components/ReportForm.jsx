@@ -15,16 +15,43 @@ export default function ReportForm({ jobId, onAdded }) {
     setFiles(Array.from(e.target.files || []));
   }
 
+  /* ===================== VALIDATION ===================== */
+  function validateForm() {
+    if (!jobId) {
+      notify.error("Missing job ID");
+      return false;
+    }
+
+    if (!description.trim() && files.length === 0) {
+      notify.error("Please add a description or photos");
+      return false;
+    }
+
+    if (description.trim() && description.trim().length < 25) {
+      notify.error("Description must be at least 25 characters long");
+      return false;
+    }
+
+    return true;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
+
+    const trimmedDescription = description.trim();
 
     if (!jobId) {
       notify.error("Missing job ID");
       return;
     }
 
-    if (!description && files.length === 0) {
-      notify.error("Please add a description or photos");
+    if (!trimmedDescription && files.length === 0) {
+      notify.error("Please add a description or at least one photo");
+      return;
+    }
+
+    if (trimmedDescription && trimmedDescription.length < 25) {
+      notify.error("Description must be at least 25 characters long");
       return;
     }
 
@@ -32,7 +59,11 @@ export default function ReportForm({ jobId, onAdded }) {
 
     try {
       const formData = new FormData();
-      formData.append("description", description);
+
+      if (trimmedDescription) {
+        formData.append("description", trimmedDescription);
+      }
+
       files.forEach((file) => formData.append("photos", file));
 
       const res = await fetch(
@@ -51,14 +82,11 @@ export default function ReportForm({ jobId, onAdded }) {
         throw new Error(data.error || "Error while adding report");
       }
 
-      if (typeof onAdded === "function") onAdded(data.report);
-
       notify.success("Report has been added");
 
       setDescription("");
       setFiles([]);
     } catch (err) {
-      console.error("Report error:", err);
       notify.error(err.message || "Error while submitting report");
     } finally {
       setLoading(false);
